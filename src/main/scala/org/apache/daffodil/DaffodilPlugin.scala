@@ -30,11 +30,14 @@ object DaffodilPlugin extends AutoPlugin {
     val daffodilPackageBinInfos = settingKey[Seq[(String, Option[String], Option[String])]](
       "Sequence of 3-tuple defining the main schema resource, optional root element, and optional name",
     )
-    val daffodilPackageBinVersions = settingKey[Set[String]](
+    val daffodilPackageBinVersions = settingKey[Seq[String]](
       "Versions of daffodil to create saved parsers for",
     )
     val packageDaffodilBin = taskKey[Seq[File]](
       "Package daffodil saved parsers",
+    )
+    val daffodilVersion = settingKey[String](
+      "Version of daffodil to add as a dependency",
     )
   }
 
@@ -58,10 +61,54 @@ object DaffodilPlugin extends AutoPlugin {
 
   override lazy val projectSettings: Seq[Setting[_]] = Seq(
     /**
+     * Default Daffodil version
+     */
+    daffodilVersion := "3.6.0",
+
+    /**
+     * Add Daffodil and version specific test dependencies
+     */
+    libraryDependencies ++= {
+      // Seq of 2-tuples, where each tuple is a Seq of version specifiers and a list of
+      // dependencies to add if the daffodilVersion matches all of those specifiers. If the
+      // version specifier Seq is empty, the associated dependencies are added regardless of
+      // Daffodil version
+      val versionedDeps = Seq(
+        // always add Daffodil and junit test dependencies
+        Nil -> Seq(
+          "org.apache.daffodil" %% "daffodil-tdml-processor" % daffodilVersion.value % "test",
+          "junit" % "junit" % "4.13.2" % "test",
+          "com.github.sbt" % "junit-interface" % "0.13.2" % "test",
+        ),
+        // Add log4j with older versions of Daffodil to silence warnings about missing loggers
+        Seq(">=3.2.0", "<=3.4.0") -> Seq(
+          "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % "test",
+        ),
+      )
+
+      val dafVer = VersionNumber(daffodilVersion.value)
+      val dependencies = versionedDeps
+        .filter { case (vers, _) => vers.forall { v => SemanticSelector(v).matches(dafVer) } }
+        .flatMap { case (_, deps) => deps }
+      dependencies
+    },
+
+    /**
+     * DFDL schemas are are not scala version specific since they just contain resources,
+     * disable crossPaths so published jars do not contain a scala version
+     */
+    crossPaths := false,
+
+    /**
+     * Enable verbose logging for junit tests
+     */
+    testOptions += Tests.Argument(TestFrameworks.JUnit, "-v"),
+
+    /**
      * Default to building no saved parsers and supporting no versions of daffodil
      */
     daffodilPackageBinInfos := Seq(),
-    daffodilPackageBinVersions := Set(),
+    daffodilPackageBinVersions := Seq(),
 
     /**
      * define and configure a custom Ivy configuration with dependencies to the Daffodil

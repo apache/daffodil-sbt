@@ -15,3 +15,4 @@
 
 .bsp
 target
+src/sbt-test/**/build.properties
