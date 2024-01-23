@@ -15,4 +15,20 @@
  * limitations under the License.
  */
 
-sbt.version=1.9.8
+package com.example
+
+import org.junit.Test
+import org.apache.daffodil.tdml.Runner
+import org.junit.AfterClass
+
+object TestExample {
+  lazy val runner = Runner("/com/example/", "test.tdml")
+
+  @AfterClass def shutdown: Unit = { runner.reset }
+}
+
+class TestExample {
+  import TestExample._
+
+  @Test def test_test01() { runner.runOneTest("test01") }
+}

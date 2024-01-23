@@ -15,8 +15,6 @@
  * limitations under the License.
  */
 
-enablePlugins(SbtPlugin)
-
 name := "sbt-daffodil"
 
 organization := "org.apache.daffodil"
@@ -31,7 +29,7 @@ scalacOptions ++= Seq(
 
 // SBT Plugin settings
 
-sbtPlugin := true
+enablePlugins(SbtPlugin)
 
 crossSbtVersions := Seq("1.8.0")
 

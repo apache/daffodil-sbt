@@ -29,6 +29,18 @@ addSbtPlugin("org.apache.daffodil" % "sbt-daffodil" % "<version>")
 
 ## Features
 
+### Common Settings
+
+This plugin configures a number of SBT settings to have better defaults for
+DFDL schema projects. This includes setting dependencies for testing (e.g.
+daffodil-tdml-processor, junit), juint test options, and more. This requires
+that the plugin knows which version of Daffodil to use, which is set by adding
+the `daffodilVersion` setting to build.sbt, for example:
+
+```scala
+daffodilVersion := "3.6.0"
+```
+
 ### Saved Parsers
 
 This plugin adds the ability to create and publish saved parsers of a schema.
@@ -53,7 +65,7 @@ parsers using the `daffodilPackageBinVersions` setting. For example, to build
 saved parsers for Daffodil 3.6.0 and 3.5.0:
 
 ```scala
-daffodilPackageBinVersions := Set("3.6.0", "3.5.0")
+daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")
 ```
 
 Then run `sbt packageDaffodilBin` to generate saved parsers in the `target/`
@@ -74,6 +86,13 @@ the version of Daffodil the saved parser is compatible with.
 The `publish`, `publishLocal`, `publishM2` and related publish tasks are
 modified to automatically build and publish the saved parsers as a new
 artifacts.
+
+If used, one may want to use the first value of this setting to configure
+`daffodilVersion`, e.g.:
+
+```scala
+daffodilVersion := daffodilPackageBinVersions.value.head
+```
 
 # License
 

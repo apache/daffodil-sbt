@@ -21,13 +21,4 @@ name := "test"
 
 organization := "com.example"
 
-crossPaths := false
-
-daffodilPackageBinInfos := Seq(
-  ("/test.dfdl.xsd", None, None),
-  ("/test.dfdl.xsd", Some("test02"), Some("two")),
-)
-
-daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")
-
-daffodilVersion := daffodilPackageBinVersions.value.head
+daffodilVersion := "3.6.0"
