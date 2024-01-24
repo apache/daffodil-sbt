@@ -94,6 +94,32 @@ If used, one may want to use the first value of this setting to configure
 daffodilVersion := daffodilPackageBinVersions.value.head
 ```
 
+## Layers and User Defined Functions
+
+If your schema project builds a Daffodil layer or user defined function, then
+set the `daffodilBuildsLayer` or `daffodilBuildsUDF` setting to true,
+respectively. For example:
+
+```scala
+daffodilBuildsLayer := true
+
+daffodilBuildsUDF := true
+```
+
+Setting either of these values to true adds additional dependencies needed to
+build the component.
+
+Note that this also sets the SBT `crossPaths` setting to `true`, which causes
+the Scala version to be included in the jar file name, since layer and UDF jars
+may be implemented in Scala and are specific to the Scala version used to build
+them. However, if your schema project implements layers/UDFs using only Java,
+you can override this in build.sbt and remove the Scala version from the jar
+name, for example:
+
+```scala
+crossPaths := false
+```
+
 ## Flat Directory Layout
 
 Instead of using the standard `src/{main,test}/{scala,resources}/` directory
