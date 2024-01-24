@@ -39,6 +39,9 @@ object DaffodilPlugin extends AutoPlugin {
     val daffodilVersion = settingKey[String](
       "Version of daffodil to add as a dependency",
     )
+    val daffodilFlatLayout = settingKey[Boolean](
+      "Whether or not to use a flat schema project layout that uses src/ and test/ root directories containing a mix of sources and resources",
+    )
   }
 
   import autoImport._
@@ -103,6 +106,11 @@ object DaffodilPlugin extends AutoPlugin {
      * Enable verbose logging for junit tests
      */
     testOptions += Tests.Argument(TestFrameworks.JUnit, "-v"),
+
+    /**
+     * Disable the flat layout by default
+     */
+    daffodilFlatLayout := false,
 
     /**
      * Default to building no saved parsers and supporting no versions of daffodil
@@ -260,6 +268,39 @@ object DaffodilPlugin extends AutoPlugin {
         pa.updated(art, file)
       }
       updatedPackagedArtifacts
+    },
+  ) ++
+    inConfig(Compile)(flatLayoutSettings("src")) ++
+    inConfig(Test)(flatLayoutSettings("test"))
+
+  /**
+   * If daffodilFlatLayout is true, returns settings to make a flat directory layout. All
+   * sources and resources for a configuration are expected to be in the directory specified by
+   * the "dir" parameter. Files that end in *.scala or *.java are treated as sources, and all
+   * other files are treated as resources. This should be used inside a Compile or Test
+   * configuration, like this:
+   *
+   *   inConfig(Compile)(flatLayoutSettings("src"))
+   *   inConfig(Test)(flatLayoutSettings("test"))
+   *
+   * If daffodilFlatLayout is false, this returns each of the settings unchanged.
+   */
+  def flatLayoutSettings(dir: String) = Seq(
+    unmanagedSourceDirectories := {
+      if (!daffodilFlatLayout.value) unmanagedSourceDirectories.value
+      else Seq(baseDirectory.value / dir)
+    },
+    unmanagedResourceDirectories := {
+      if (!daffodilFlatLayout.value) unmanagedResourceDirectories.value
+      else unmanagedSourceDirectories.value
+    },
+    unmanagedSources / includeFilter := {
+      if (!daffodilFlatLayout.value) (unmanagedSources / includeFilter).value
+      else "*.java" | "*.scala"
+    },
+    unmanagedResources / excludeFilter := {
+      if (!daffodilFlatLayout.value) (unmanagedResources / excludeFilter).value
+      else (unmanagedSources / includeFilter).value,
     },
   )
 

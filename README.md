@@ -94,6 +94,22 @@ If used, one may want to use the first value of this setting to configure
 daffodilVersion := daffodilPackageBinVersions.value.head
 ```
 
+## Flat Directory Layout
+
+Instead of using the standard `src/{main,test}/{scala,resources}/` directory
+layout that SBT defaults to, a flatter layout can be used for simple schemas,
+like when testing or creating examples. One can set `daffodilFlatLayout` to
+enable this:
+
+```scala
+daffodilFlatLayout := true
+```
+
+This configures SBT to expect all compile source and resource files to be in a
+root `src/` directory, and all test source and resource files to be in a root
+`test/` directory. Source files are those that end with `*.scala` or `*.java`,
+and resource files are anything else.
+
 # License
 
 Apache Daffodil SBT Plugin is licensed under the [Apache License, v2.0].
