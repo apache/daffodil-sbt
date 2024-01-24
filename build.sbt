@@ -27,6 +27,19 @@ scalacOptions ++= Seq(
   "-Ywarn-unused:imports",
 )
 
+scmInfo := Some(
+  ScmInfo(
+    browseUrl = url("https://github.com/apache/daffodil-sbt"),
+    connection = "scm:git:https://github.com/apache/daffodil-sbt",
+  ),
+)
+
+licenses := Seq(License.Apache2)
+
+homepage := Some(url("https://daffodil.apache.org"))
+
+releaseNotesURL := Some(url(s"https://daffodil.apache.org/sbt/${version.value}/"))
+
 // SBT Plugin settings
 
 enablePlugins(SbtPlugin)
