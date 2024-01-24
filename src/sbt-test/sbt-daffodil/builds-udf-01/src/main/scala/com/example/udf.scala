@@ -15,17 +15,12 @@
  * limitations under the License.
  */
 
-version := "0.1"
+package com.example
 
-name := "test"
+import org.apache.daffodil.udf.UserDefinedFunction
 
-organization := "com.example"
+// this is not a real udf, but the above import will fail to compile if daffodil-udf is not on
+// the compile classpath
+class TestUDF {
+}
 
-daffodilPackageBinInfos := Seq(
-  ("/test.dfdl.xsd", None, None),
-  ("/test.dfdl.xsd", Some("test02"), Some("two")),
-)
-
-daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")
-
-daffodilVersion := daffodilPackageBinVersions.value.head

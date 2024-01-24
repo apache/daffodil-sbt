@@ -39,6 +39,12 @@ object DaffodilPlugin extends AutoPlugin {
     val daffodilVersion = settingKey[String](
       "Version of daffodil to add as a dependency",
     )
+    val daffodilBuildsLayer = settingKey[Boolean](
+      "Whether or not the project builds a layer",
+    )
+    val daffodilBuildsUDF = settingKey[Boolean](
+      "Whether or not the project builds a user defined function",
+    )
     val daffodilFlatLayout = settingKey[Boolean](
       "Whether or not to use a flat schema project layout that uses src/ and test/ root directories containing a mix of sources and resources",
     )
@@ -69,6 +75,12 @@ object DaffodilPlugin extends AutoPlugin {
     daffodilVersion := "3.6.0",
 
     /**
+     * Assume schemas do not include layers or UDFs, projects can override these if they do
+     */
+    daffodilBuildsLayer := false,
+    daffodilBuildsUDF := false,
+
+    /**
      * Add Daffodil and version specific test dependencies
      */
     libraryDependencies ++= {
@@ -97,10 +109,36 @@ object DaffodilPlugin extends AutoPlugin {
     },
 
     /**
-     * DFDL schemas are are not scala version specific since they just contain resources,
-     * disable crossPaths so published jars do not contain a scala version
+     * Add layer compile dependencies if enabled
      */
-    crossPaths := false,
+    libraryDependencies ++= {
+      if (daffodilBuildsLayer.value) {
+        Seq("org.apache.daffodil" %% "daffodil-runtime1-layers" % daffodilVersion.value)
+      } else {
+        Seq()
+      }
+    },
+
+    /**
+     * Add UDF compile dependencies if enabled
+     */
+    libraryDependencies ++= {
+      if (daffodilBuildsUDF.value) {
+        Seq("org.apache.daffodil" %% "daffodil-udf" % daffodilVersion.value)
+      } else {
+        Seq()
+      }
+    },
+
+    /**
+     * DFDL schemas are not scala version specific since they just contain resources, so we
+     * disable crossPaths so that published jars do not contain a scala version. However, if a
+     * project builds layers or UDFs, then we do need to enable crossPaths since those might be
+     * implemented in Scala and so is version dependent. If they are implemented purely in Java,
+     * projects can override this and change the setting to false if they don't want the scala
+     * version in the jar name.
+     */
+    crossPaths := (daffodilBuildsLayer.value || daffodilBuildsUDF.value),
 
     /**
      * Enable verbose logging for junit tests

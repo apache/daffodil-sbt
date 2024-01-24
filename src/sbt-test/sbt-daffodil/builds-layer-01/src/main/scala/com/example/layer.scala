@@ -15,17 +15,12 @@
  * limitations under the License.
  */
 
-version := "0.1"
+package com.example
 
-name := "test"
+import org.apache.daffodil.runtime1.layers.LayerCompiler
 
-organization := "com.example"
+// this is not a real layer, but the above import will fail to compile if
+// daffodil-runtime1-layers is not on the compile classpath
+class TestLayer {
+}
 
-daffodilPackageBinInfos := Seq(
-  ("/test.dfdl.xsd", None, None),
-  ("/test.dfdl.xsd", Some("test02"), Some("two")),
-)
-
-daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")
-
-daffodilVersion := daffodilPackageBinVersions.value.head
