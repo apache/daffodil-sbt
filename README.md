@@ -94,6 +94,32 @@ If used, one may want to use the first value of this setting to configure
 daffodilVersion := daffodilPackageBinVersions.value.head
 ```
 
+### Saved Parsers in TDML Tests
+
+For schemas that take a long time to compile, it is often convenient to use a
+saved parser created by the `packageDaffodilBin` task in TDML tests. If this
+is the case, set the following:
+
+```scala
+daffodilTdmlUsesPackageBin := true
+```
+
+When set to `true` , running `sbt test` automatically triggers
+`packageDaffodilBin` and puts the resulting saved parsers on the classpath so
+that TDML files can reference them. Note that when referencing saved parsers
+from a TDML file, version numbers and `daffodilXYZ` are excluded--this way TDML
+files do not need to be updated when a version is changed. For example, a TDML
+file using a saved parser created at `target/format-1.0-file-daffodil350.bin`
+is referenced like this:
+
+```xml
+<parserTestCase ... model="/format-file.bin">
+```
+
+Note that only saved parsers for `daffodilVersion` can be referenced. For this
+reason, `daffodilVersion` must also be defined in `daffodilPackageBinVersions`
+if `daffodilTdmlUsesPackageBin` is `true`.
+
 ## Layers and User Defined Functions
 
 If your schema project builds a Daffodil layer or user defined function, then

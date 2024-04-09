@@ -48,6 +48,9 @@ object DaffodilPlugin extends AutoPlugin {
     val daffodilFlatLayout = settingKey[Boolean](
       "Whether or not to use a flat schema project layout that uses src/ and test/ root directories containing a mix of sources and resources",
     )
+    val daffodilTdmlUsesPackageBin = settingKey[Boolean](
+      "Whether or not TDML files use the saved parsers created by daffodilPackageBin",
+    )
   }
 
   import autoImport._
@@ -75,10 +78,11 @@ object DaffodilPlugin extends AutoPlugin {
     daffodilVersion := "3.6.0",
 
     /**
-     * Assume schemas do not include layers or UDFs, projects can override these if they do
+     * Disable uncommon features by default, schema projects must explicitly enable them to use
      */
     daffodilBuildsLayer := false,
     daffodilBuildsUDF := false,
+    daffodilTdmlUsesPackageBin := false,
 
     /**
      * Add Daffodil and version specific test dependencies
@@ -306,6 +310,38 @@ object DaffodilPlugin extends AutoPlugin {
         pa.updated(art, file)
       }
       updatedPackagedArtifacts
+    },
+    Test / dependencyClasspath ++= {
+      if (daffodilTdmlUsesPackageBin.value) {
+
+        if (!daffodilPackageBinVersions.value.contains(daffodilVersion.value)) {
+          throw new MessageOnlyException(
+            s"daffodilPackageBinVersions (${daffodilPackageBinVersions.value.mkString(", ")}) must contain daffodilVersion (${daffodilVersion.value}) if daffodilTdmlUsesPackageBin is true",
+          )
+        }
+
+        // force creation of saved parsers
+        val allSavedParsers = packageDaffodilBin.value
+
+        // create a directory that we will put on the classpath, deleting it and all contents
+        // if it already exists
+        val parserClasspathDir = target.value / "tdmlparsers"
+        IO.delete(parserClasspathDir)
+        IO.createDirectory(parserClasspathDir)
+
+        // copy the saved parsers for daffodilVersion into our classpath directory
+        daffodilPackageBinInfos.value.foreach { case (_, _, optName) =>
+          val sourceClassifier = classifierName(optName, daffodilVersion.value)
+          val source = target.value / s"${name.value}-${version.value}-${sourceClassifier}.bin"
+          val destClassifier = optName.map { "-" + _ }.getOrElse("")
+          val dest = parserClasspathDir / s"${name.value}${destClassifier}.bin"
+          IO.copyFile(source, dest)
+        }
+
+        Seq(parserClasspathDir)
+      } else {
+        Seq()
+      }
     },
   ) ++
     inConfig(Compile)(flatLayoutSettings("src")) ++
