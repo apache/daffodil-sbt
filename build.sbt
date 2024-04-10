@@ -58,3 +58,9 @@ ratExcludes := Seq(
 )
 
 ratFailBinaries := true
+
+Test / test := {
+  // run all scripted tasks as part of testing
+  (Compile / scripted).toTask("").value
+  (Test / test).value
+}

@@ -93,8 +93,8 @@ jobs:
       # Check
       ############################################################
 
-      - name: Run Scripted Tests
-        run: $SBT scripted
+      - name: Run Tests
+        run: $SBT test
 
   # Lint checks that do not require compilation
   lint:
