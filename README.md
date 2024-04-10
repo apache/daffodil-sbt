@@ -122,7 +122,7 @@ Note that only saved parsers for `daffodilVersion` can be referenced. For this
 reason, `daffodilVersion` must also be defined in `daffodilPackageBinVersions`
 if `daffodilTdmlUsesPackageBin` is `true`.
 
-## Layers and User Defined Functions
+### Layers and User Defined Functions
 
 If your schema project builds a Daffodil layer or user defined function, then
 set the `daffodilBuildsLayer` or `daffodilBuildsUDF` setting to true,
@@ -148,7 +148,7 @@ name, for example:
 crossPaths := false
 ```
 
-## Flat Directory Layout
+### Flat Directory Layout
 
 Instead of using the standard `src/{main,test}/{scala,resources}/` directory
 layout that SBT defaults to, a flatter layout can be used for simple schemas,
@@ -164,8 +164,42 @@ root `src/` directory, and all test source and resource files to be in a root
 `test/` directory. Source files are those that end with `*.scala` or `*.java`,
 and resource files are anything else.
 
-# License
+## Testing
+
+This plugin use the [scripted test framework] for testing. Each directory in
+`src/sbt-test/sbt-daffodil/` is a small SBT project the uses this plugin, and
+defines a `test.script` file that lists sbt commandss and file system checks to
+run.
+
+To run all tests, run either of these commands:
+
+```bash
+sbt test
+sbt scripted
+```
+
+To run a single scripted test, run the command:
+
+```bash
+sbt "scripted sbt-daffodil/<test_name>"
+```
+
+Where `<test_name>` is the name of a directory in `src/sbt-test/sbt-daffodil/`.
+
+When a scripted test fails it is sometimes helpful to directly run SBT commands
+within the test directory. To do so, publish the plugin locally, cd to the
+scripted test directory, and run SBT defining the version of the plugin that
+was just published, for example:
+
+```bash
+sbt publishLocal
+cd src/sbt-test/sbt-daffodil/<test_name>
+sbt -Dplugin.version=1.0.0-SNAPSHOT
+```
+
+## License
 
 Apache Daffodil SBT Plugin is licensed under the [Apache License, v2.0].
 
 [Apache License, v2.0]: https://www.apache.org/licenses/LICENSE-2.0
+[scripted test framework]: https://www.scala-sbt.org/1.x/docs/Testing-sbt-plugins.html
