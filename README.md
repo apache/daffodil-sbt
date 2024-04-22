@@ -33,9 +33,11 @@ addSbtPlugin("org.apache.daffodil" % "sbt-daffodil" % "<version>")
 
 This plugin configures a number of SBT settings to have better defaults for
 DFDL schema projects. This includes setting dependencies for testing (e.g.
-daffodil-tdml-processor, junit), juint test options, and more. This requires
-that the plugin knows which version of Daffodil to use, which is set by adding
-the `daffodilVersion` setting to build.sbt, for example:
+daffodil-tdml-processor, junit), juint test options, and more.
+
+By default, this plugin configures the Daffodil dependency to be the latest
+version available at the time of the plugins release, but to pin to a specific
+Daffodil version set the `daffodilVersion` setting in build.sbt, for example:
 
 ```scala
 daffodilVersion := "3.6.0"
