@@ -72,7 +72,7 @@ object DaffodilPlugin extends AutoPlugin {
     /**
      * Default Daffodil version
      */
-    daffodilVersion := "3.6.0",
+    daffodilVersion := "3.7.0",
 
     /**
      * Assume schemas do not include layers or UDFs, projects can override these if they do
