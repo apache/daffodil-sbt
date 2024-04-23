@@ -21,6 +21,8 @@ name := "test"
 
 organization := "com.example"
 
+enablePlugins(DaffodilPlugin)
+
 daffodilPackageBinInfos := Seq(
   ("/com/example/test.dfdl.xsd", None, None),
   ("/com/example/test.dfdl.xsd", Some("test02"), Some("two")),

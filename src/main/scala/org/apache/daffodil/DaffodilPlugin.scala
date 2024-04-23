@@ -24,8 +24,6 @@ import sbt._
 
 object DaffodilPlugin extends AutoPlugin {
 
-  override def trigger = allRequirements
-
   object autoImport {
     val daffodilPackageBinInfos = settingKey[Seq[(String, Option[String], Option[String])]](
       "Sequence of 3-tuple defining the main schema resource, optional root element, and optional name",

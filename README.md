@@ -27,6 +27,12 @@ To enable the plugin, add the following to `project/plugins.sbt`:
 addSbtPlugin("org.apache.daffodil" % "sbt-daffodil" % "<version>")
 ```
 
+And add the following to `build.sbt`:
+
+```scala
+enablePlugins(DaffodilPlugin)
+```
+
 ## Features
 
 ### Common Settings

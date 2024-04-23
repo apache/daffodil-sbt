@@ -21,6 +21,8 @@ name := "test"
 
 organization := "com.example"
 
+enablePlugins(DaffodilPlugin)
+
 daffodilVersion := "3.6.0"
 
 daffodilBuildsUDF := true
