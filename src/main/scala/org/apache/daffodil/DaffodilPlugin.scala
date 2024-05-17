@@ -309,7 +309,14 @@ object DaffodilPlugin extends AutoPlugin {
       }
       updatedPackagedArtifacts
     },
-    Test / dependencyClasspath ++= {
+
+    /**
+    * If daffodilTdmlUsesPackageBin is true, we create a resource generator to build the saved
+    * parsers and add them as a resource for the TDML files to find and use. Note that we use a
+    * resourceGenerator since other methods make it difficult to convince IntelliJ to put the
+    * files on the test classpath. See below Test/packageBin/mappings for related changes.
+     */
+    Test / resourceGenerators += Def.taskIf {
       if (daffodilTdmlUsesPackageBin.value) {
 
         if (!daffodilPackageBinVersions.value.contains(daffodilVersion.value)) {
@@ -318,27 +325,43 @@ object DaffodilPlugin extends AutoPlugin {
           )
         }
 
-        // force creation of saved parsers
+        // force creation of saved parsers, there isn't currently a way to build them for just
+        // daffodilVersion
         val allSavedParsers = packageDaffodilBin.value
 
-        // create a directory that we will put on the classpath, deleting it and all contents
-        // if it already exists
-        val parserClasspathDir = target.value / "tdmlparsers"
-        IO.delete(parserClasspathDir)
-        IO.createDirectory(parserClasspathDir)
-
-        // copy the saved parsers for daffodilVersion into our classpath directory
-        daffodilPackageBinInfos.value.foreach { case (_, _, optName) =>
+        // copy the saved parsers for the current daffodilVersion to the root of the
+        // resourceManaged directory, and consider those our generated resources
+        val destDir = (Test / resourceManaged).value
+        val tdmlParserFiles = daffodilPackageBinInfos.value.map { case (_, _, optName) =>
           val sourceClassifier = classifierName(optName, daffodilVersion.value)
           val source = target.value / s"${name.value}-${version.value}-${sourceClassifier}.bin"
           val destClassifier = optName.map { "-" + _ }.getOrElse("")
-          val dest = parserClasspathDir / s"${name.value}${destClassifier}.bin"
+          val dest = destDir / s"${name.value}${destClassifier}.bin"
           IO.copyFile(source, dest)
+          dest
         }
-
-        Seq(parserClasspathDir)
+        tdmlParserFiles
       } else {
         Seq()
+      }
+    }.taskValue,
+
+    /**
+     * The above resource generator creates saved parsers as test resources so that tests can
+     * find them on the classpath. But this means the parsers will also be packaged in test
+     * jars. Saved parsers are already published as artifacts, so there's no reason to also
+     * include them in jars--remove them from the mapping that says which files to put in jars.
+     */
+    Test / packageBin / mappings := {
+      val existingMappings = (Test / packageBin / mappings).value
+      if (daffodilTdmlUsesPackageBin.value) {
+        val tdmlParserNames = daffodilPackageBinInfos.value.map { case (_, _, optName) =>
+          val destClassifier = optName.map { "-" + _ }.getOrElse("")
+          s"${name.value}${destClassifier}.bin"
+        }
+        existingMappings.filterNot { case (_, name) => tdmlParserNames.contains(name) }
+      } else {
+        existingMappings
       }
     },
   ) ++
