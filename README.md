@@ -128,6 +128,11 @@ Note that only saved parsers for `daffodilVersion` can be referenced. For this
 reason, `daffodilVersion` must also be defined in `daffodilPackageBinVersions`
 if `daffodilTdmlUsesPackageBin` is `true`.
 
+This is implemented using a SBT resource generator which some IDE's, like
+IntelliJ, do not trigger during builds. So you must either run `sbt Test/compile`
+to manually trigger the resource generator, or let SBT handle builds by
+enabling the "Use SBT shell for builds" option.
+
 ### Layers and User Defined Functions
 
 If your schema project builds a Daffodil layer or user defined function, then

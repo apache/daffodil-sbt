@@ -22,8 +22,8 @@ $ exists target/test-0.1-daffodil360.bin
 $ exists target/test-0.1-two-daffodil350.bin
 $ exists target/test-0.1-two-daffodil360.bin
 
-> Test/dependencyClasspath
-$ must-mirror target/tdmlparsers/test.bin target/test-0.1-daffodil360.bin
-$ must-mirror target/tdmlparsers/test-two.bin target/test-0.1-two-daffodil360.bin
+> Test/compile
+$ must-mirror target/test-classes/test.bin target/test-0.1-daffodil360.bin
+$ must-mirror target/test-classes/test-two.bin target/test-0.1-two-daffodil360.bin
 
 > test
