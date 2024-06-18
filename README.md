@@ -49,6 +49,11 @@ Daffodil version set the `daffodilVersion` setting in build.sbt, for example:
 daffodilVersion := "3.6.0"
 ```
 
+Notably, this plugin sets `scalaVersion`, which should usually not be defined
+in schema projects using this plugin. This setting is set to the version of
+Scala used for the release of `daffodilVersion` and raised to the [minimum JDK
+compatible Scala version] if required.
+
 ### Saved Parsers
 
 This plugin adds the ability to create and publish saved parsers of a schema.
@@ -214,3 +219,4 @@ Apache Daffodil SBT Plugin is licensed under the [Apache License, v2.0].
 
 [Apache License, v2.0]: https://www.apache.org/licenses/LICENSE-2.0
 [scripted test framework]: https://www.scala-sbt.org/1.x/docs/Testing-sbt-plugins.html
+[minimum JDK compatible Scala version]: https://docs.scala-lang.org/overviews/jdk-compatibility/overview.html
