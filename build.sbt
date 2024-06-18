@@ -21,7 +21,7 @@ organization := "org.apache.daffodil"
 
 version := "1.1.0-SNAPSHOT"
 
-scalaVersion := "2.12.18"
+scalaVersion := "2.12.19"
 
 scalacOptions ++= Seq(
   "-Ywarn-unused:imports",
