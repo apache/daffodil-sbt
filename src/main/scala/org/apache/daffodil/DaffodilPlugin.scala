@@ -18,6 +18,7 @@
 package org.apache.daffodil
 
 import java.io.File
+import scala.util.Properties
 
 import sbt.Keys._
 import sbt._
@@ -69,7 +70,70 @@ object DaffodilPlugin extends AutoPlugin {
     (optName.toSeq ++ Seq(cfg)).mkString("-")
   }
 
+  /**
+   * Filter a Map based on a version and whether or not it matches SemanticSelectors. See the
+   * SBT documenation for the syntax here:
+   *
+   * https://github.com/sbt/librarymanagement/blob/develop/core/src/main/contraband-scala/sbt/librarymanagement/SemanticSelector.scala
+   *
+   * For each mapping, if the SemanticSelector matches the given version, then the value of that
+   * mapping is selected. All mapping values that are selected are added to a Seq and returned.
+   * There is no implied order in the mapping and it is possible for multiple mappings to be
+   * selected. If only one mapping should be selected, the SemanticSelector keys should be made
+   * to be non-overlapping.
+   */
+  def filterVersions[T](version: String, mappings: Map[String, T]): Seq[T] = {
+    val vn = VersionNumber(version)
+    val filteredValues = mappings
+      .filterKeys { semSel => SemanticSelector(semSel).matches(vn) }
+      .values
+      .toSeq
+    filteredValues
+  }
+
   override lazy val projectSettings: Seq[Setting[_]] = Seq(
+    /**
+     * Even though Daffodil defines a transitive dependency to a specific version of Scala, once
+     * SBT sees that dependency it replaces it with a dependency to the value of the
+     * scalaVersion setting, ignoring whatever version Daffodil depends on. Settings like
+     * autoScalaLibrary and managedScalaInstance do not seem to change this behavior. So we
+     * maintain a mapping of scalaVersions used for each Daffodil release and set the
+     * scalaVersion setting based on the daffodilVersion setting. As long as schema projects do
+     * not override this setting, it ensures they use the same Scala version that Daffodil was
+     * released with. Schema projects can override this setting if they really need a specific
+     * Scala version, but that should be rare. We also take into account the minimum scala
+     * version supported by the current JDK.
+     */
+    scalaVersion := {
+      val jdkMinScalaVersionMapping = Map(
+        ">=23    " -> "2.12.20",
+        ">=22 <23" -> "2.12.19",
+        ">=21 <22" -> "2.12.18",
+        ">=17 <21" -> "2.12.15",
+        ">=11 <17" -> "2.12.4",
+        "     <11" -> "2.12.0",
+      )
+
+      val daffodilScalaVersionMapping = Map(
+        ">=3.7.0       " -> "2.12.19",
+        ">=3.5.0 <3.7.0" -> "2.12.18",
+        ">=3.4.0 <3.5.0" -> "2.12.17",
+        ">=3.2.0 <3.4.0" -> "2.12.15",
+        ">=3.1.0 <3.2.0" -> "2.12.13",
+        "        <3.1.0" -> "2.12.11",
+      )
+
+      val dafScalaVersion =
+        filterVersions(daffodilVersion.value, daffodilScalaVersionMapping).head
+      val jdkScalaVersion =
+        filterVersions(Properties.javaSpecVersion, jdkMinScalaVersionMapping).head
+      if (SemanticSelector("<" + jdkScalaVersion).matches(VersionNumber(dafScalaVersion))) {
+        jdkScalaVersion
+      } else {
+        dafScalaVersion
+      }
+    },
+
     /**
      * Default Daffodil version
      */
@@ -90,23 +154,19 @@ object DaffodilPlugin extends AutoPlugin {
       // dependencies to add if the daffodilVersion matches all of those specifiers. If the
       // version specifier Seq is empty, the associated dependencies are added regardless of
       // Daffodil version
-      val versionedDeps = Seq(
+      val versionedDeps = Map(
         // always add Daffodil and junit test dependencies
-        Nil -> Seq(
+        ">=3.0.0" -> Seq(
           "org.apache.daffodil" %% "daffodil-tdml-processor" % daffodilVersion.value % "test",
           "junit" % "junit" % "4.13.2" % "test",
           "com.github.sbt" % "junit-interface" % "0.13.2" % "test",
         ),
         // Add log4j with older versions of Daffodil to silence warnings about missing loggers
-        Seq(">=3.2.0", "<=3.4.0") -> Seq(
+        ">=3.2.0 <=3.4.0" -> Seq(
           "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % "test",
         ),
       )
-
-      val dafVer = VersionNumber(daffodilVersion.value)
-      val dependencies = versionedDeps
-        .filter { case (vers, _) => vers.forall { v => SemanticSelector(v).matches(dafVer) } }
-        .flatMap { case (_, deps) => deps }
+      val dependencies = filterVersions(daffodilVersion.value, versionedDeps).flatten
       dependencies
     },
 
@@ -167,16 +227,16 @@ object DaffodilPlugin extends AutoPlugin {
       Configuration.of(cfg.capitalize, cfg)
     }.toSeq,
     libraryDependencies ++= {
-      daffodilPackageBinVersions.value.flatMap { daffodilVersion =>
-        val cfg = ivyConfigName(daffodilVersion)
-        val dafDep = "org.apache.daffodil" %% "daffodil-japi" % daffodilVersion % cfg
+      daffodilPackageBinVersions.value.flatMap { binDaffodilVersion =>
+        val cfg = ivyConfigName(binDaffodilVersion)
+        val dafDep = "org.apache.daffodil" %% "daffodil-japi" % binDaffodilVersion % cfg
         // logging backends used to hide warnings about missing backends, Daffodil won't
         // actually output logs that we care about, so this doesn't really matter
-        val logDep = if (SemanticSelector(">=3.5.0").matches(VersionNumber(daffodilVersion))) {
-          "org.slf4j" % "slf4j-nop" % "2.0.9" % cfg
-        } else {
-          "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % cfg
-        }
+        val logMappings = Map(
+          ">=3.5.0" -> "org.slf4j" % "slf4j-nop" % "2.0.9" % cfg,
+          "<3.5.0" -> "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % cfg,
+        )
+        val logDep = filterVersions(binDaffodilVersion, logMappings).head
         Seq(dafDep, logDep)
       }.toSeq
     },
