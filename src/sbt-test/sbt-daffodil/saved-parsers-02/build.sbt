@@ -23,13 +23,12 @@ organization := "com.example"
 
 enablePlugins(DaffodilPlugin)
 
+// same as saved-parsers-01 but uses the old tuple syntax
 daffodilPackageBinInfos := Seq(
-  DaffodilBinInfo("/com/example/test.dfdl.xsd"),
-  DaffodilBinInfo("/com/example/test.dfdl.xsd", Some("test02"), Some("two")),
+  ("/test.dfdl.xsd", None, None),
+  ("/test.dfdl.xsd", Some("test02"), Some("two")),
 )
 
 daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")
 
 daffodilVersion := daffodilPackageBinVersions.value.head
-
-daffodilTdmlUsesPackageBin := true

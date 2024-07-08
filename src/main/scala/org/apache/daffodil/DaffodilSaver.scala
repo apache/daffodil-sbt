@@ -34,9 +34,13 @@ import scala.collection.JavaConverters._
 object DaffodilSaver {
 
   /**
-   * Usage: daffodilReflectionSave <schemaFile> <outputFile> [root]
+   * Usage: daffodilReflectionSave <schemaFile> <outputFile> <root> <config>
+   *
+   * If <root> or <config> is unknown/not-provided, they must be the empty string
    */
   def main(args: Array[String]): Unit = {
+
+    if (args.length != 4) System.err.println(s"[error] four arguments are required")
 
     val schemaFile = new File(this.getClass.getResource(args(0)).toURI)
     val output = FileChannel.open(
@@ -44,7 +48,8 @@ object DaffodilSaver {
       StandardOpenOption.CREATE,
       StandardOpenOption.WRITE,
     )
-    val root = if (args.length > 2) args(2) else null
+    val root = if (args(2) != "") args(2) else null
+    val config = if (args(3) != "") args(3) else null
 
     // parameter types
     val cFile = classOf[File]
@@ -58,6 +63,7 @@ object DaffodilSaver {
     val daffodilCompiler = daffodilClass.getMethod("compiler")
 
     val compilerClass = Class.forName("org.apache.daffodil.japi.Compiler")
+    val compilerWithTunable = compilerClass.getMethod("withTunable", cString, cString)
     val compilerCompileFile = compilerClass.getMethod("compileFile", cFile, cString, cString)
 
     val processorFactoryClass = Class.forName("org.apache.daffodil.japi.ProcessorFactory")
@@ -86,7 +92,17 @@ object DaffodilSaver {
     }
 
     // val compiler = Daffodil.compiler()
-    val compiler = daffodilCompiler.invoke(null)
+    var compiler = daffodilCompiler.invoke(null)
+
+    // compiler = compiler.withTunable(...)
+    if (config != null) {
+      val configXml = scala.xml.Utility.trim(scala.xml.XML.loadFile(config))
+      (configXml \ "tunables").foreach { tunablesNode =>
+        tunablesNode.child.foreach { node =>
+          compiler = compilerWithTunable.invoke(compiler, node.label, node.text)
+        }
+      }
+    }
 
     // val processorFactory = compiler.compileFile(schemaFile, root, None)
     val processorFactory = compilerCompileFile
