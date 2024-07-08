@@ -18,6 +18,7 @@
 package org.apache.daffodil
 
 import java.io.File
+import scala.language.implicitConversions
 import scala.util.Properties
 
 import sbt.Keys._
@@ -26,8 +27,8 @@ import sbt._
 object DaffodilPlugin extends AutoPlugin {
 
   object autoImport {
-    val daffodilPackageBinInfos = settingKey[Seq[(String, Option[String], Option[String])]](
-      "Sequence of 3-tuple defining the main schema resource, optional root element, and optional name",
+    val daffodilPackageBinInfos = settingKey[Seq[DaffodilBinInfo]](
+      "Information used to create compiled parsers",
     )
     val daffodilPackageBinVersions = settingKey[Seq[String]](
       "Versions of daffodil to create saved parsers for",
@@ -50,13 +51,35 @@ object DaffodilPlugin extends AutoPlugin {
     val daffodilTdmlUsesPackageBin = settingKey[Boolean](
       "Whether or not TDML files use the saved parsers created by daffodilPackageBin",
     )
+
+    /**
+     * Class to define daffodilPackageBinInfos, auto-imported to simplify sbt configs
+     */
+    case class DaffodilBinInfo(
+      schema: String,
+      root: Option[String] = None,
+      name: Option[String] = None,
+      config: Option[File] = None,
+    )
+
+    /**
+     * Provides backwards compatibility with the older versions of the plugin where
+     * daffodilPackagBinInfos was a Seq of 3-tuples instead of a DaffodilBinInfo
+     */
+    implicit def threeTupleToDaffodilBinInfo(t: (String, Option[String], Option[String])) = {
+      DaffodilBinInfo(
+        schema = t._1,
+        root = t._2,
+        name = t._3,
+      )
+    }
   }
 
   import autoImport._
 
   /**
-  * Generate a daffodil version specific ivy configuration string by removing everything
-  * except for alphanumeric characters
+   * Generate a daffodil version specific ivy configuration string by removing everything
+   * except for alphanumeric characters
    */
   def ivyConfigName(daffodilVersion: String): String = {
     "daffodil" + daffodilVersion.replaceAll("[^a-zA-Z0-9]", "")
@@ -246,12 +269,12 @@ object DaffodilPlugin extends AutoPlugin {
      */
     packageDaffodilBin / artifacts := {
       daffodilPackageBinVersions.value.flatMap { daffodilVersion =>
-        daffodilPackageBinInfos.value.map { case (_, _, optName) =>
+        daffodilPackageBinInfos.value.map { dbi =>
           // each artifact has the same name as the jar, in the "parser" type, "bin" extension,
-          // and daffodil version specific classifier. If optName is provided, it is prepended
+          // and daffodil version specific classifier. If dbi.name is Some, it is prepended
           // to the classifier separated by a hyphen. Note that publishing as maven style will
           // only use the name, extension, and classifier
-          val classifier = classifierName(optName, daffodilVersion)
+          val classifier = classifierName(dbi.name, daffodilVersion)
           Artifact(name.value, "parser", "bin", Some(classifier), Vector(), None)
         }
       }.toSeq
@@ -278,9 +301,7 @@ object DaffodilPlugin extends AutoPlugin {
 
       // the name field is the only thing that makes saved parser artifacts unique. Ensure there
       // are no duplicates.
-      val groupedClassifiers = daffodilPackageBinInfos.value.groupBy { case (_, _, optName) =>
-        optName
-      }
+      val groupedClassifiers = daffodilPackageBinInfos.value.groupBy { _.name }
       val duplicates = groupedClassifiers.filter { case (k, v) => v.length > 1 }.keySet
       if (duplicates.size > 0) {
         val dupsStr = duplicates.mkString(", ")
@@ -311,8 +332,8 @@ object DaffodilPlugin extends AutoPlugin {
           // on the classpath before projectClasspath jars
           val classpathFiles = Seq(pluginJar) ++ daffodilJars ++ projectClasspath
 
-          daffodilPackageBinInfos.value.map { case (mainSchema, optRoot, optName) =>
-            val classifier = classifierName(optName, daffodilVersion)
+          daffodilPackageBinInfos.value.map { dbi =>
+            val classifier = classifierName(dbi.name, daffodilVersion)
             val targetFile = target.value / s"${name.value}-${version.value}-${classifier}.bin"
 
             // extract options out of DAFFODIL_JAVA_OPTS or JAVA_OPTS environment variables.
@@ -328,9 +349,11 @@ object DaffodilPlugin extends AutoPlugin {
               "-classpath",
               classpathFiles.mkString(File.pathSeparator),
               mainClass,
-              mainSchema,
+              dbi.schema,
               targetFile.toString,
-            ) ++ optRoot.toSeq
+              dbi.root.getOrElse(""),
+              dbi.config.map { _.toString }.getOrElse(""),
+            )
 
             logger.info(s"compiling daffodil parser to ${targetFile} ...")
 
@@ -392,10 +415,10 @@ object DaffodilPlugin extends AutoPlugin {
         // copy the saved parsers for the current daffodilVersion to the root of the
         // resourceManaged directory, and consider those our generated resources
         val destDir = (Test / resourceManaged).value
-        val tdmlParserFiles = daffodilPackageBinInfos.value.map { case (_, _, optName) =>
-          val sourceClassifier = classifierName(optName, daffodilVersion.value)
+        val tdmlParserFiles = daffodilPackageBinInfos.value.map { dbi =>
+          val sourceClassifier = classifierName(dbi.name, daffodilVersion.value)
           val source = target.value / s"${name.value}-${version.value}-${sourceClassifier}.bin"
-          val destClassifier = optName.map { "-" + _ }.getOrElse("")
+          val destClassifier = dbi.name.map { "-" + _ }.getOrElse("")
           val dest = destDir / s"${name.value}${destClassifier}.bin"
           IO.copyFile(source, dest)
           dest
@@ -415,8 +438,8 @@ object DaffodilPlugin extends AutoPlugin {
     Test / packageBin / mappings := {
       val existingMappings = (Test / packageBin / mappings).value
       if (daffodilTdmlUsesPackageBin.value) {
-        val tdmlParserNames = daffodilPackageBinInfos.value.map { case (_, _, optName) =>
-          val destClassifier = optName.map { "-" + _ }.getOrElse("")
+        val tdmlParserNames = daffodilPackageBinInfos.value.map { dbi =>
+          val destClassifier = dbi.name.map { "-" + _ }.getOrElse("")
           s"${name.value}${destClassifier}.bin"
         }
         existingMappings.filterNot { case (_, name) => tdmlParserNames.contains(name) }

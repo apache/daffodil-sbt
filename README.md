@@ -59,17 +59,23 @@ compatible Scala version] if required.
 This plugin adds the ability to create and publish saved parsers of a schema.
 
 For each saved parser to generate, add an entry to the
-`daffodilPackageBinInfos` setting. This setting is a Seq of 3-tuples made up of
-the resource path to the schema, an optional root element to use in that
-schema, and an optional name that is added to the artifact classifier to
-differentiate multiple saved parsers. If the optional root element is `None`,
-then the first element in the schemas is used. An example of this settings
-supporting two roots looks like this:
+`daffodilPackageBinInfos` setting. This setting is a `Seq[DaffodilBinInfo]`,
+where each element in the sequence defines information to create a saved parser
+with the following parameters:
+
+|Name    |Type             |Reqiured | Description |
+|--------|-----------------|---------|-------------|
+|schema  |`String`         |yes      |Resource path to the main schema |
+|root    |`Option[String]` |no       |Root element in the schema. If `None`, uses the first element in the schema |
+|name    |`Option[String]` |no       |If `Some`, includes value in the jar classifier, useful to distinguish saved parsers |
+|config  |`Option[File]`   |no       |Path to a configuration file used during compilation |
+
+An example of this settings supporting two roots looks like this:
 
 ```scala
 daffodilPackageBinInfos := Seq(
-  ("/com/example/xsd/mainSchema.dfdl.xsd", Some("record"), None)
-  ("/com/example/xsd/mainSchema.dfdl.xsd", Some("fileOrRecords"), Some("file"))
+  DaffodilBinInfo("/com/example/xsd/mainSchema.dfdl.xsd", Some("record"))
+  DaffodilBinInfo("/com/example/xsd/mainSchema.dfdl.xsd", Some("fileOfRecords"), Some("file"))
 )
 ```
 
