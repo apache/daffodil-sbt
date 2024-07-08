@@ -138,27 +138,29 @@ IntelliJ, do not trigger during builds. So you must either run `sbt Test/compile
 to manually trigger the resource generator, or let SBT handle builds by
 enabling the "Use SBT shell for builds" option.
 
-### Layers and User Defined Functions
+### Charsets, Layers, and User Defined Functions
 
-If your schema project builds a Daffodil layer or user defined function, then
-set the `daffodilBuildsLayer` or `daffodilBuildsUDF` setting to true,
-respectively. For example:
+If your schema project builds a Daffodil charset, layer, or user defined
+function, then set the `daffodilBuildsCharset`, `daffodilBuildsLayer`, or
+`daffodilBuildsUDF` setting to true, respectively. For example:
 
 ```scala
+daffodilBuildsCharset := true
+
 daffodilBuildsLayer := true
 
 daffodilBuildsUDF := true
 ```
 
-Setting either of these values to true adds additional dependencies needed to
+Setting any of these values to true adds additional dependencies needed to
 build the component.
 
 Note that this also sets the SBT `crossPaths` setting to `true`, which causes
-the Scala version to be included in the jar file name, since layer and UDF jars
-may be implemented in Scala and are specific to the Scala version used to build
-them. However, if your schema project implements layers/UDFs using only Java,
-you can override this in build.sbt and remove the Scala version from the jar
-name, for example:
+the Scala version to be included in the jar file name, since charsets, layers,
+and UDF jars may be implemented in Scala and are specific to the Scala version
+used to build them. However, if your schema project implements
+charsets/layers/UDFs using only Java, you can override this in build.sbt and
+remove the Scala version from the jar name, for example:
 
 ```scala
 crossPaths := false

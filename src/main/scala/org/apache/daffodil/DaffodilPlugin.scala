@@ -38,6 +38,9 @@ object DaffodilPlugin extends AutoPlugin {
     val daffodilVersion = settingKey[String](
       "Version of daffodil to add as a dependency",
     )
+    val daffodilBuildsCharset = settingKey[Boolean](
+      "Whether or not the project builds a charset",
+    )
     val daffodilBuildsLayer = settingKey[Boolean](
       "Whether or not the project builds a layer",
     )
@@ -142,6 +145,7 @@ object DaffodilPlugin extends AutoPlugin {
     /**
      * Disable uncommon features by default, schema projects must explicitly enable them to use
      */
+    daffodilBuildsCharset := false,
     daffodilBuildsLayer := false,
     daffodilBuildsUDF := false,
     daffodilTdmlUsesPackageBin := false,
@@ -168,6 +172,17 @@ object DaffodilPlugin extends AutoPlugin {
       )
       val dependencies = filterVersions(daffodilVersion.value, versionedDeps).flatten
       dependencies
+    },
+
+    /**
+     * Add Charset compile dependencies if enabled
+     */
+    libraryDependencies ++= {
+      if (daffodilBuildsCharset.value) {
+        Seq("org.apache.daffodil" %% "daffodil-io" % daffodilVersion.value)
+      } else {
+        Seq()
+      }
     },
 
     /**
@@ -200,7 +215,7 @@ object DaffodilPlugin extends AutoPlugin {
      * projects can override this and change the setting to false if they don't want the scala
      * version in the jar name.
      */
-    crossPaths := (daffodilBuildsLayer.value || daffodilBuildsUDF.value),
+    crossPaths := (daffodilBuildsCharset.value || daffodilBuildsLayer.value || daffodilBuildsUDF.value),
 
     /**
      * Enable verbose logging for junit tests
