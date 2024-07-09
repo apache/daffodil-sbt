@@ -17,7 +17,7 @@
 
 package org.apache.daffodil
 
-import java.io.File
+import java.net.URI
 import java.nio.channels.FileChannel
 import java.nio.channels.WritableByteChannel
 import java.nio.file.Paths
@@ -34,7 +34,7 @@ import scala.collection.JavaConverters._
 object DaffodilSaver {
 
   /**
-   * Usage: daffodilReflectionSave <schemaFile> <outputFile> <root> <config>
+   * Usage: daffodilReflectionSave <schemaResource> <outputFile> <root> <config>
    *
    * If <root> or <config> is unknown/not-provided, they must be the empty string
    */
@@ -42,7 +42,11 @@ object DaffodilSaver {
 
     if (args.length != 4) System.err.println(s"[error] four arguments are required")
 
-    val schemaFile = new File(this.getClass.getResource(args(0)).toURI)
+    val schemaUrl = this.getClass.getResource(args(0))
+    if (schemaUrl == null) {
+      System.err.println(s"failed to find schema resource: ${args(0)}")
+      System.exit(1)
+    }
     val output = FileChannel.open(
       Paths.get(args(1)),
       StandardOpenOption.CREATE,
@@ -52,7 +56,7 @@ object DaffodilSaver {
     val config = if (args(3) != "") args(3) else null
 
     // parameter types
-    val cFile = classOf[File]
+    val cURI = classOf[URI]
     val cString = classOf[String]
     val cWritableByteChannel = classOf[WritableByteChannel]
 
@@ -64,7 +68,7 @@ object DaffodilSaver {
 
     val compilerClass = Class.forName("org.apache.daffodil.japi.Compiler")
     val compilerWithTunable = compilerClass.getMethod("withTunable", cString, cString)
-    val compilerCompileFile = compilerClass.getMethod("compileFile", cFile, cString, cString)
+    val compilerCompileSource = compilerClass.getMethod("compileSource", cURI, cString, cString)
 
     val processorFactoryClass = Class.forName("org.apache.daffodil.japi.ProcessorFactory")
     val processorFactoryIsError = processorFactoryClass.getMethod("isError")
@@ -104,9 +108,9 @@ object DaffodilSaver {
       }
     }
 
-    // val processorFactory = compiler.compileFile(schemaFile, root, None)
-    val processorFactory = compilerCompileFile
-      .invoke(compiler, schemaFile, root, null)
+    // val processorFactory = compiler.compileSource(schemaUrl.toURI, root, None)
+    val processorFactory = compilerCompileSource
+      .invoke(compiler, schemaUrl.toURI, root, null)
 
     // val processorFactoryDiags = processorFactory.getDiagnostics()
     val processorFactoryDiags = processorFactoryGetDiagnostics
