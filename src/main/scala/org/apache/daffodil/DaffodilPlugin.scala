@@ -349,7 +349,8 @@ object DaffodilPlugin extends AutoPlugin {
 
           daffodilPackageBinInfos.value.map { dbi =>
             val classifier = classifierName(dbi.name, daffodilVersion)
-            val targetFile = target.value / s"${name.value}-${version.value}-${classifier}.bin"
+            val targetName = s"${name.value}-${version.value}-${classifier}.bin"
+            val targetFile = target.value / targetName
 
             // extract options out of DAFFODIL_JAVA_OPTS or JAVA_OPTS environment variables.
             // Note that this doesn't handle escaped spaces or quotes correctly, but that
@@ -376,7 +377,7 @@ object DaffodilPlugin extends AutoPlugin {
               .withOutputStrategy(Some(LoggedOutput(logger)))
             val ret = Fork.java(forkOpts, args)
             if (ret != 0) {
-              throw new MessageOnlyException(s"failed to save daffodil parser ${classifier}")
+              throw new MessageOnlyException(s"failed to save daffodil parser: $targetName")
             }
             targetFile
           }
