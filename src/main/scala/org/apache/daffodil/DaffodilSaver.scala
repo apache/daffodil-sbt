@@ -40,7 +40,10 @@ object DaffodilSaver {
    */
   def main(args: Array[String]): Unit = {
 
-    if (args.length != 4) System.err.println(s"[error] four arguments are required")
+    assert(
+      args.length == 4,
+      "DaffodilPlugin did not provide the correct number of arguments when forking DaffodilSaver",
+    )
 
     val schemaUrl = this.getClass.getResource(args(0))
     if (schemaUrl == null) {
