@@ -24,7 +24,7 @@ organization := "com.example"
 enablePlugins(DaffodilPlugin)
 
 daffodilPackageBinInfos := Seq(
-  DaffodilBinInfo("/does-not-exist.dfdl.xsd")
+  DaffodilBinInfo("/does-not-exist.dfdl.xsd"),
 )
 
 daffodilPackageBinVersions := Seq(daffodilVersion.value)

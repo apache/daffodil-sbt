@@ -21,6 +21,4 @@ import org.apache.daffodil.io.processors.charset.BitsCharsetDefinition
 
 // this is not a real charset, but the above import will fail to compile if daffodil-io (which
 // contains the Daffodil charset API is not on the compile classpath
-class TestCharset {
-}
-
+class TestCharset {}

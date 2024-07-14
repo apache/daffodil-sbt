@@ -17,9 +17,10 @@
 
 package com.example
 
-import org.junit.Test
 import org.apache.daffodil.tdml.Runner
+
 import org.junit.AfterClass
+import org.junit.Test
 
 object TestExample {
   lazy val runner = Runner("/com/example/", "test.tdml")
