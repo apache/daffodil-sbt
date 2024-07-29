@@ -24,8 +24,16 @@ organization := "com.example"
 enablePlugins(DaffodilPlugin)
 
 daffodilPackageBinInfos := Seq(
-  DaffodilBinInfo("/test.dfdl.xsd", config = Some((Compile / resourceDirectory).value / "test.cfg")),
-  DaffodilBinInfo("/test.dfdl.xsd", Some("test02"), Some("two"), config = Some((Compile / resourceDirectory).value / "test.cfg")),
+  DaffodilBinInfo(
+    "/test.dfdl.xsd",
+    config = Some((Compile / resourceDirectory).value / "test.cfg"),
+  ),
+  DaffodilBinInfo(
+    "/test.dfdl.xsd",
+    Some("test02"),
+    Some("two"),
+    config = Some((Compile / resourceDirectory).value / "test.cfg"),
+  ),
 )
 
 daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")
