@@ -21,6 +21,4 @@ import org.apache.daffodil.runtime1.layers.LayerCompiler
 
 // this is not a real layer, but the above import will fail to compile if
 // daffodil-runtime1-layers is not on the compile classpath
-class TestLayer {
-}
-
+class TestLayer {}
