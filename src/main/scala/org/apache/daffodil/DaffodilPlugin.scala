@@ -297,6 +297,9 @@ object DaffodilPlugin extends AutoPlugin {
     packageDaffodilBin := {
       val logger = streams.value.log
 
+      // options to provide to the forked JVM process used to save a processor
+      val jvmArgs = (packageDaffodilBin / javaOptions).value
+
       // this plugin jar includes a forkable main class that does the actual schema compilation
       // and saving.
       val pluginJar =
@@ -352,16 +355,7 @@ object DaffodilPlugin extends AutoPlugin {
             val targetName = s"${name.value}-${version.value}-${classifier}.bin"
             val targetFile = target.value / targetName
 
-            // extract options out of DAFFODIL_JAVA_OPTS or JAVA_OPTS environment variables.
-            // Note that this doesn't handle escaped spaces or quotes correctly, but that
-            // hopefully shouldn't be needed for specifying java options
-            val envArgs = None
-              .orElse(sys.env.get("DAFFODIL_JAVA_OPTS"))
-              .orElse(sys.env.get("JAVA_OPTS"))
-              .map(_.split("\\s+").toSeq)
-              .getOrElse(Seq.empty)
-
-            val args = envArgs ++ Seq(
+            val args = jvmArgs ++ Seq(
               "-classpath",
               classpathFiles.mkString(File.pathSeparator),
               mainClass,
