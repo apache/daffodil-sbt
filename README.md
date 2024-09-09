@@ -113,6 +113,15 @@ If used, one may want to use the first value of this setting to configure
 daffodilVersion := daffodilPackageBinVersions.value.head
 ```
 
+Some complex schemas require more memory or a larger stack size than Java
+provides by default. Change the `packageDaffodilBin / javaOptions` setting in
+build.sbt to increase these sizes, or more generally to specify options to
+provide to the JVM used to save parsers. For example:
+
+```scala
+packageDaffodilBin / javaOptions ++= Seq("-Xmx8G", "-Xss4m")
+```
+
 ### Saved Parsers in TDML Tests
 
 For schemas that take a long time to compile, it is often convenient to use a
