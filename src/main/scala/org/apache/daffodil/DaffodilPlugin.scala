@@ -361,10 +361,26 @@ object DaffodilPlugin extends AutoPlugin {
               )
             }
 
+            // the DaffodilSaver needs to know which version of Daffodil we are using to create
+            // a saved processor, since some versions of Daffodil have different APIs and it
+            // must use the correct one using reflection. The DaffodilSaver is forked without
+            // SBT libraries on the classpath, so it can't easily use the SemanticVersion to
+            // compare versions. So we map each Daffodil version to an "internal API" version,
+            // which is just a simple number that is easier to use in the Saver and signify
+            // where API functions to use. This is the mapping for which Daffodil API should be
+            // used for a particular "internal API"
+            val daffodilInternalApiVersionMapping = Map(
+              ">3.8.0" -> "2",
+              "<=3.8.0" -> "1",
+            )
+            val internalApiVersion =
+              filterVersions(daffodilVersion, daffodilInternalApiVersionMapping).head
+
             val args = jvmArgs ++ Seq(
               "-classpath",
               classpathFiles.mkString(File.pathSeparator),
               mainClass,
+              internalApiVersion,
               dbi.schema,
               targetFile.toString,
               dbi.root.getOrElse(""),
