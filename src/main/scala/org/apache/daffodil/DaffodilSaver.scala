@@ -34,29 +34,35 @@ import scala.collection.JavaConverters._
 object DaffodilSaver {
 
   /**
-   * Usage: daffodilReflectionSave <schemaResource> <outputFile> <root> <config>
+   * Usage: daffodilReflectionSave <apiVersion> <schemaResource> <outputFile> <root> <config>
    *
    * If <root> or <config> is unknown/not-provided, they must be the empty string
    */
   def main(args: Array[String]): Unit = {
 
     assert(
-      args.length == 4,
+      args.length == 5,
       "DaffodilPlugin did not provide the correct number of arguments when forking DaffodilSaver",
     )
 
-    val schemaUrl = this.getClass.getResource(args(0))
+    // the "version" of the Daffodil API to use. Note that this is not the same as the Daffodil
+    // version, but is related. See the "daffodilInternalAPIVersionMapping" in the plugin code
+    // for an explanation of why we have this and what version of Daffodil it represents.
+    val apiVersion = args(0).toInt
+
+    val schemaResource = args(1)
+    val schemaUrl = this.getClass.getResource(schemaResource)
     if (schemaUrl == null) {
-      System.err.println(s"failed to find schema resource: ${args(0)}")
+      System.err.println(s"failed to find schema resource: $schemaResource")
       System.exit(1)
     }
     val output = FileChannel.open(
-      Paths.get(args(1)),
+      Paths.get(args(2)),
       StandardOpenOption.CREATE,
       StandardOpenOption.WRITE,
     )
-    val root = if (args(2) != "") args(2) else null
-    val config = if (args(3) != "") args(3) else null
+    val root = if (args(3) != "") args(3) else null
+    val config = if (args(4) != "") args(4) else null
 
     // parameter types
     val cURI = classOf[URI]
@@ -71,7 +77,13 @@ object DaffodilSaver {
 
     val compilerClass = Class.forName("org.apache.daffodil.japi.Compiler")
     val compilerWithTunable = compilerClass.getMethod("withTunable", cString, cString)
-    val compilerCompileSource = compilerClass.getMethod("compileSource", cURI, cString, cString)
+    // the compileResource method added in Daffodil 3.9.0 allows for depersonalized diagnostics
+    // and better reproducibility of saved parsers--use it instead of compileSource for newer
+    // versions of Daffodil
+    val compilerCompile = apiVersion match {
+      case 1 => compilerClass.getMethod("compileSource", cURI, cString, cString)
+      case 2 => compilerClass.getMethod("compileResource", cString, cString, cString)
+    }
 
     val processorFactoryClass = Class.forName("org.apache.daffodil.japi.ProcessorFactory")
     val processorFactoryIsError = processorFactoryClass.getMethod("isError")
@@ -111,9 +123,13 @@ object DaffodilSaver {
       }
     }
 
-    // val processorFactory = compiler.compileSource(schemaUrl.toURI, root, None)
-    val processorFactory = compilerCompileSource
-      .invoke(compiler, schemaUrl.toURI, root, null)
+    // val processorFactory = compiler.compileSource(schemaUrl.toURI, root, None)  // < 3.9.0
+    // val processorFactory = compiler.compileResource(name, root, None)           // >= 3.9.0
+    val schemaArg = apiVersion match {
+      case 1 => schemaUrl.toURI
+      case 2 => schemaResource
+    }
+    val processorFactory = compilerCompile.invoke(compiler, schemaArg, root, null)
 
     // val processorFactoryDiags = processorFactory.getDiagnostics()
     val processorFactoryDiags = processorFactoryGetDiagnostics
