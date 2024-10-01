@@ -280,7 +280,7 @@ object DaffodilPlugin extends AutoPlugin {
     },
 
     /**
-     * define the artifacts and the packageDaffodilXyzBin task that creates the artifacts
+     * define the artifacts, products, and the packageDaffodilBin task that creates the artifacts/products
      */
     packageDaffodilBin / artifacts := {
       daffodilPackageBinVersions.value.flatMap { daffodilVersion =>
@@ -294,7 +294,7 @@ object DaffodilPlugin extends AutoPlugin {
         }
       }.toSeq
     },
-    packageDaffodilBin := {
+    packageDaffodilBin / products := {
       val logger = streams.value.log
 
       // options to provide to the forked JVM process used to save a processor
@@ -323,7 +323,7 @@ object DaffodilPlugin extends AutoPlugin {
       val duplicates = groupedClassifiers.filter { case (k, v) => v.length > 1 }.keySet
       if (duplicates.size > 0) {
         val dupsStr = duplicates.mkString(", ")
-        val msg = s"daffodilPackageBinInfos defines duplicate classifiers: $dupsStr"
+        val msg = s"daffodilPackageBinInfos defines duplicate name parameters: $dupsStr"
         throw new MessageOnlyException(msg)
       }
 
@@ -355,6 +355,12 @@ object DaffodilPlugin extends AutoPlugin {
             val targetName = s"${name.value}-${version.value}-${classifier}.bin"
             val targetFile = target.value / targetName
 
+            if (!dbi.schema.startsWith("/")) {
+              throw new MessageOnlyException(
+                s"daffodilPackageBinInfos schema must be a resource path that starts with '/':  ${dbi.schema}",
+              )
+            }
+
             val args = jvmArgs ++ Seq(
               "-classpath",
               classpathFiles.mkString(File.pathSeparator),
@@ -382,6 +388,21 @@ object DaffodilPlugin extends AutoPlugin {
       val savedParsers = cachedFun(filesToWatch)
       savedParsers.toSeq
     },
+    packageDaffodilBin := {
+      val logger = streams.value.log
+
+      val prods = (packageDaffodilBin / products).value
+      if (prods.length == 0) {
+        // only warn if packageDaffodilBin is expliclty run and no artifacts are generated
+        // because one of the bin infos settings is empty. Any tasks that need this list of save
+        // parser files but do not want this warning should access
+        // (packageDaffodilBin / products).value instead of packageDaffodilBin.value
+        logger.warn(
+          "no saved parsers created--one or both of daffodilPackageBinInfos and daffodilPackageBinVersions are empty",
+        )
+      }
+      prods
+    },
 
     /**
      * These two settings tell sbt about the artifacts and the task that generates the artifacts
@@ -390,7 +411,7 @@ object DaffodilPlugin extends AutoPlugin {
     artifacts ++= (packageDaffodilBin / artifacts).value,
     packagedArtifacts := {
       val arts = (packageDaffodilBin / artifacts).value
-      val files = packageDaffodilBin.value
+      val files = (packageDaffodilBin / products).value
 
       // the artifacts and associated files are not necessarily in the same order. For each
       // artifact, we need to find the associated file (the one that ends with the same
@@ -420,7 +441,7 @@ object DaffodilPlugin extends AutoPlugin {
 
         // force creation of saved parsers, there isn't currently a way to build them for just
         // daffodilVersion
-        val allSavedParsers = packageDaffodilBin.value
+        val allSavedParsers = (packageDaffodilBin / products).value
 
         // copy the saved parsers for the current daffodilVersion to the root of the
         // resourceManaged directory, and consider those our generated resources
