@@ -202,7 +202,7 @@ object DaffodilPlugin extends AutoPlugin {
      */
     libraryDependencies ++= {
       if (daffodilBuildsCharset.value) {
-        Seq("org.apache.daffodil" %% "daffodil-io" % daffodilVersion.value)
+        Seq("org.apache.daffodil" %% "daffodil-io" % daffodilVersion.value % "provided")
       } else {
         Seq()
       }
@@ -213,7 +213,9 @@ object DaffodilPlugin extends AutoPlugin {
      */
     libraryDependencies ++= {
       if (daffodilBuildsLayer.value) {
-        Seq("org.apache.daffodil" %% "daffodil-runtime1-layers" % daffodilVersion.value)
+        Seq(
+          "org.apache.daffodil" %% "daffodil-runtime1-layers" % daffodilVersion.value % "provided",
+        )
       } else {
         Seq()
       }
@@ -224,7 +226,7 @@ object DaffodilPlugin extends AutoPlugin {
      */
     libraryDependencies ++= {
       if (daffodilBuildsUDF.value) {
-        Seq("org.apache.daffodil" %% "daffodil-udf" % daffodilVersion.value)
+        Seq("org.apache.daffodil" %% "daffodil-udf" % daffodilVersion.value % "provided")
       } else {
         Seq()
       }
