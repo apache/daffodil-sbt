@@ -61,14 +61,71 @@ This plugin adds the ability to create and publish saved parsers of a schema.
 For each saved parser to generate, add an entry to the
 `daffodilPackageBinInfos` setting. This setting is a `Seq[DaffodilBinInfo]`,
 where each element in the sequence defines information to create a saved parser
-with the following parameters:
+with parameters describe below.
 
-|Name    |Type             |Reqiured | Description |
-|--------|-----------------|---------|-------------|
-|schema  |`String`         |yes      |Resource path to the main schema |
-|root    |`Option[String]` |no       |Root element in the schema. If `None`, uses the first element in the schema |
-|name    |`Option[String]` |no       |If `Some`, includes value in the jar classifier, useful to distinguish saved parsers |
-|config  |`Option[File]`   |no       |Path to a configuration file used during compilation |
+#### DaffodilBinInfo Parameters
+
+##### schema
+
+Type: `String`
+
+Resource path to the main schema. Since this is a resource path it must start
+with a `/` and exclude path elements like `src/main/resources`.
+
+Example:
+
+```scala
+schema = "/org/example/xsd/schema.dfdl.xsd"`
+```
+
+##### root
+
+Type: `Option[String]`
+
+Root element in the schema used for parsing/unparsing. If `None`, uses the
+first element found in the main schema. Defaults to `None` if not provided.
+
+Example:
+```scala
+root = Some("fileOfRecords")
+```
+
+##### name
+
+Type: `Option[String]`
+
+If defined, includes the value in the jar classifier. This is required to
+distinguish multiple saved parsers if multiple `DaffodilBinInfo`'s are
+specified. Defaults to `None` if not provided.
+
+Example:
+```scala
+name = Some("file")
+```
+
+##### config
+
+Type: `Option[File]`
+
+Path to a configuration file used during compilation, currently only used to
+specify tunables. If specified, it should usually use SBT settings to create
+the path. Defaults to `None` if not provided.
+
+Example:
+
+If the configuration file is in `src/main/resources/`, then use:
+
+```scala
+config = Some(resourceDirectory.value / "path" / "to" / "config.xml")
+```
+
+If the configuration file is in the root of the SBT project, then use:
+
+```scala
+config = Some(baseDirectory.value / "path" / "to" / "config.xml")
+```
+
+#### Saved Parser Examples
 
 An example of this settings supporting two roots looks like this:
 
