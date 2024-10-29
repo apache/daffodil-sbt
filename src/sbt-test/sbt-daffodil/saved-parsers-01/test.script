@@ -16,16 +16,29 @@
 ## under the License.
 ## 
 
-> packageDaffodilBin
+> set publishTo := Some(Resolver.file("file", new File("target/ivy-publish/")))
+
+> publish
 $ exists target/test-0.1-daffodil350.bin
 $ exists target/test-0.1-daffodil360.bin
 $ exists target/test-0.1-two-daffodil350.bin
 $ exists target/test-0.1-two-daffodil360.bin
-
-> set publishTo := Some(Resolver.file("file", new File("target/ivy-publish/")))
-> publish
 $ exists target/ivy-publish/com/example/test/0.1/test-0.1.jar
 $ exists target/ivy-publish/com/example/test/0.1/test-0.1-daffodil350.bin
 $ exists target/ivy-publish/com/example/test/0.1/test-0.1-daffodil360.bin
 $ exists target/ivy-publish/com/example/test/0.1/test-0.1-two-daffodil350.bin
 $ exists target/ivy-publish/com/example/test/0.1/test-0.1-two-daffodil360.bin
+
+> clean
+
+> set packageDaffodilBin/publishArtifact := false
+> publish
+$ exists target/ivy-publish/com/example/test/0.1/test-0.1.jar
+$ absent target/test-0.1-daffodil350.bin
+$ absent target/test-0.1-daffodil360.bin
+$ absent target/test-0.1-two-daffodil350.bin
+$ absent target/test-0.1-two-daffodil360.bin
+$ absent target/ivy-publish/com/example/test/0.1/test-0.1-daffodil350.bin
+$ absent target/ivy-publish/com/example/test/0.1/test-0.1-daffodil360.bin
+$ absent target/ivy-publish/com/example/test/0.1/test-0.1-two-daffodil350.bin
+$ absent target/ivy-publish/com/example/test/0.1/test-0.1-two-daffodil360.bin

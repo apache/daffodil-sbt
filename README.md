@@ -159,15 +159,19 @@ target/format-1.0-file-daffodil360.bin
 Note that the artifact names have the suffix "daffodilXYZ".bin, where XYZ is
 the version of Daffodil the saved parser is compatible with.
 
-The `publish`, `publishLocal`, `publishM2` and related publish tasks are
-modified to automatically build and publish the saved parsers as a new
-artifacts.
-
 If used, one may want to use the first value of this setting to configure
 `daffodilVersion`, e.g.:
 
 ```scala
 daffodilVersion := daffodilPackageBinVersions.value.head
+```
+
+The `publish`, `publishLocal`, `publishM2` and related publish tasks are
+modified to automatically build and publish the saved parsers as new artifacts.
+To disable publishing saved parsrs, add the following setting to build.sbt:
+
+```scala
+packageDaffodilBin / publishArtifact := false
 ```
 
 Some complex schemas require more memory or a larger stack size than Java

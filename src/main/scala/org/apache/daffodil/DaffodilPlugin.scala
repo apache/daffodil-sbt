@@ -426,20 +426,31 @@ object DaffodilPlugin extends AutoPlugin {
      * These two settings tell sbt about the artifacts and the task that generates the artifacts
      * so it knows to generate and publish them when publish/publihLocal/publishM2 is run
      */
-    artifacts ++= (packageDaffodilBin / artifacts).value,
-    packagedArtifacts := {
-      val arts = (packageDaffodilBin / artifacts).value
-      val files = (packageDaffodilBin / products).value
-
-      // the artifacts and associated files are not necessarily in the same order. For each
-      // artifact, we need to find the associated file (the one that ends with the same
-      // classifier and extension) and update the packagedArtifacts setting with that pair
-      val updatedPackagedArtifacts = arts.foldLeft(packagedArtifacts.value) { case (pa, art) =>
-        val suffix = s"-${art.classifier.get}.${art.extension}"
-        val file = files.find { _.getName.endsWith(suffix) }.get
-        pa.updated(art, file)
+    artifacts ++= {
+      if ((packageDaffodilBin / publishArtifact).value) {
+        (packageDaffodilBin / artifacts).value,
+      } else {
+        Seq()
       }
-      updatedPackagedArtifacts
+    },
+    packagedArtifacts := {
+      if ((packageDaffodilBin / publishArtifact).value) {
+        val arts = (packageDaffodilBin / artifacts).value
+        val files = (packageDaffodilBin / products).value
+
+        // the artifacts and associated files are not necessarily in the same order. For each
+        // artifact, we need to find the associated file (the one that ends with the same
+        // classifier and extension) and update the packagedArtifacts setting with that pair
+        val updatedPackagedArtifacts = arts.foldLeft(packagedArtifacts.value) {
+          case (pa, art) =>
+            val suffix = s"-${art.classifier.get}.${art.extension}"
+            val file = files.find { _.getName.endsWith(suffix) }.get
+            pa.updated(art, file)
+        }
+        updatedPackagedArtifacts
+      } else {
+        packagedArtifacts.value
+      }
     },
 
     /**
