@@ -526,11 +526,17 @@ object DaffodilPlugin extends AutoPlugin {
   def flatLayoutSettings(dir: String) = Seq(
     unmanagedSourceDirectories := {
       if (!daffodilFlatLayout.value) unmanagedSourceDirectories.value
-      else Seq(baseDirectory.value / dir)
+      else {
+        nonFlatWarning(Keys.sLog.value, unmanagedSourceDirectories.value)
+        Seq(baseDirectory.value / dir)
+      }
     },
     unmanagedResourceDirectories := {
       if (!daffodilFlatLayout.value) unmanagedResourceDirectories.value
-      else unmanagedSourceDirectories.value
+      else {
+        nonFlatWarning(Keys.sLog.value, unmanagedResourceDirectories.value)
+        unmanagedSourceDirectories.value
+      }
     },
     unmanagedSources / includeFilter := {
       if (!daffodilFlatLayout.value) (unmanagedSources / includeFilter).value
@@ -541,5 +547,17 @@ object DaffodilPlugin extends AutoPlugin {
       else (unmanagedSources / includeFilter).value,
     },
   )
+
+  /**
+   * Before changing the unmanagedSource/ResourceDirectories settings to be flat, we should call
+   * this function passing in the current non-flat setting value. This will detect if any of the
+   * directories in a non-flat layout exist, and if so warn. This helps to avoid cases where
+   * daffodilFlatLayout is true but the layout isn't actually flat.
+   */
+  private def nonFlatWarning(logger: Logger, dirsThatShouldNotExist: Seq[File]): Unit = {
+    dirsThatShouldNotExist.filter(_.exists).foreach { dir =>
+      logger.warn("daffodilFlatLayout is true, but the layout does not look flat: " + dir)
+    }
+  }
 
 }
