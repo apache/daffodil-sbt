@@ -23,10 +23,13 @@ organization := "com.example"
 
 enablePlugins(DaffodilPlugin)
 
-daffodilPackageBinInfos := Seq(
-  DaffodilBinInfo("/test.dfdl.xsd", config = Some((Compile / resourceDirectory).value / "test.cfg")),
-  DaffodilBinInfo("/test.dfdl.xsd", Some("test02"), Some("two"), config = Some((Compile / resourceDirectory).value / "test.cfg")),
-)
+daffodilPackageBinInfos := {
+  val config = Some((Compile / resourceDirectory).value / "test.cfg")
+  Seq(
+    DaffodilBinInfo("/test.dfdl.xsd", config = config),
+    DaffodilBinInfo("/test.dfdl.xsd", Some("test02"), Some("two"), config = config)
+  )
+}
 
 daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")
 

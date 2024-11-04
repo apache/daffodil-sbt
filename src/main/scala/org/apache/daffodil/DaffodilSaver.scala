@@ -42,7 +42,7 @@ object DaffodilSaver {
 
     assert(
       args.length == 5,
-      "DaffodilPlugin did not provide the correct number of arguments when forking DaffodilSaver",
+      "DaffodilPlugin did not provide the correct number of arguments when forking DaffodilSaver"
     )
 
     // the "version" of the Daffodil API to use. Note that this is not the same as the Daffodil
@@ -59,7 +59,7 @@ object DaffodilSaver {
     val output = FileChannel.open(
       Paths.get(args(2)),
       StandardOpenOption.CREATE,
-      StandardOpenOption.WRITE,
+      StandardOpenOption.WRITE
     )
     val root = if (args(3) != "") args(3) else null
     val config = if (args(4) != "") args(4) else null
