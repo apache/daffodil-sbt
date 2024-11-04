@@ -26,7 +26,7 @@ enablePlugins(DaffodilPlugin)
 packageDaffodilBin / javaOptions ++= Seq("-XshouldErrorIfUsed")
 
 daffodilPackageBinInfos := Seq(
-  DaffodilBinInfo("/test.dfdl.xsd"),
+  DaffodilBinInfo("/test.dfdl.xsd")
 )
 
 daffodilPackageBinVersions := Seq("3.6.0")

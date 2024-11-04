@@ -25,7 +25,7 @@ enablePlugins(DaffodilPlugin)
 
 daffodilPackageBinInfos := Seq(
   DaffodilBinInfo("/com/example/test.dfdl.xsd"),
-  DaffodilBinInfo("/com/example/test.dfdl.xsd", Some("test02"), Some("two")),
+  DaffodilBinInfo("/com/example/test.dfdl.xsd", Some("test02"), Some("two"))
 )
 
 daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")

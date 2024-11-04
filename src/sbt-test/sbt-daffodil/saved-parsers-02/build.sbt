@@ -26,7 +26,7 @@ enablePlugins(DaffodilPlugin)
 // same as saved-parsers-01 but uses the old tuple syntax
 daffodilPackageBinInfos := Seq(
   ("/test.dfdl.xsd", None, None),
-  ("/test.dfdl.xsd", Some("test02"), Some("two")),
+  ("/test.dfdl.xsd", Some("test02"), Some("two"))
 )
 
 daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")

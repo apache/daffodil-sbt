@@ -21,6 +21,4 @@ import org.apache.daffodil.udf.UserDefinedFunction
 
 // this is not a real udf, but the above import will fail to compile if daffodil-udf is not on
 // the compile classpath
-class TestUDF {
-}
-
+class TestUDF {}

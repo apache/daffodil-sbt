@@ -28,31 +28,31 @@ object DaffodilPlugin extends AutoPlugin {
 
   object autoImport {
     val daffodilPackageBinInfos = settingKey[Seq[DaffodilBinInfo]](
-      "Information used to create compiled parsers",
+      "Information used to create compiled parsers"
     )
     val daffodilPackageBinVersions = settingKey[Seq[String]](
-      "Versions of daffodil to create saved parsers for",
+      "Versions of daffodil to create saved parsers for"
     )
     val packageDaffodilBin = taskKey[Seq[File]](
-      "Package daffodil saved parsers",
+      "Package daffodil saved parsers"
     )
     val daffodilVersion = settingKey[String](
-      "Version of daffodil to add as a dependency",
+      "Version of daffodil to add as a dependency"
     )
     val daffodilBuildsCharset = settingKey[Boolean](
-      "Whether or not the project builds a charset",
+      "Whether or not the project builds a charset"
     )
     val daffodilBuildsLayer = settingKey[Boolean](
-      "Whether or not the project builds a layer",
+      "Whether or not the project builds a layer"
     )
     val daffodilBuildsUDF = settingKey[Boolean](
-      "Whether or not the project builds a user defined function",
+      "Whether or not the project builds a user defined function"
     )
     val daffodilFlatLayout = settingKey[Boolean](
-      "Whether or not to use a flat schema project layout that uses src/ and test/ root directories containing a mix of sources and resources",
+      "Whether or not to use a flat schema project layout that uses src/ and test/ root directories containing a mix of sources and resources"
     )
     val daffodilTdmlUsesPackageBin = settingKey[Boolean](
-      "Whether or not TDML files use the saved parsers created by daffodilPackageBin",
+      "Whether or not TDML files use the saved parsers created by daffodilPackageBin"
     )
 
     /**
@@ -62,7 +62,7 @@ object DaffodilPlugin extends AutoPlugin {
       schema: String,
       root: Option[String] = None,
       name: Option[String] = None,
-      config: Option[File] = None,
+      config: Option[File] = None
     )
 
     /**
@@ -73,7 +73,7 @@ object DaffodilPlugin extends AutoPlugin {
       DaffodilBinInfo(
         schema = t._1,
         root = t._2,
-        name = t._3,
+        name = t._3
       )
     }
   }
@@ -137,7 +137,7 @@ object DaffodilPlugin extends AutoPlugin {
         ">=21 <22" -> "2.12.18",
         ">=17 <21" -> "2.12.15",
         ">=11 <17" -> "2.12.4",
-        "     <11" -> "2.12.0",
+        "     <11" -> "2.12.0"
       )
 
       val daffodilScalaVersionMapping = Map(
@@ -146,7 +146,7 @@ object DaffodilPlugin extends AutoPlugin {
         ">=3.4.0 <3.5.0" -> "2.12.17",
         ">=3.2.0 <3.4.0" -> "2.12.15",
         ">=3.1.0 <3.2.0" -> "2.12.13",
-        "        <3.1.0" -> "2.12.11",
+        "        <3.1.0" -> "2.12.11"
       )
 
       val dafScalaVersion =
@@ -186,12 +186,12 @@ object DaffodilPlugin extends AutoPlugin {
         ">=3.0.0" -> Seq(
           "org.apache.daffodil" %% "daffodil-tdml-processor" % daffodilVersion.value % "test",
           "junit" % "junit" % "4.13.2" % "test",
-          "com.github.sbt" % "junit-interface" % "0.13.2" % "test",
+          "com.github.sbt" % "junit-interface" % "0.13.2" % "test"
         ),
         // Add log4j with older versions of Daffodil to silence warnings about missing loggers
         ">=3.2.0 <=3.4.0" -> Seq(
-          "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % "test",
-        ),
+          "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % "test"
+        )
       )
       val dependencies = filterVersions(daffodilVersion.value, versionedDeps).flatten
       dependencies
@@ -214,7 +214,7 @@ object DaffodilPlugin extends AutoPlugin {
     libraryDependencies ++= {
       if (daffodilBuildsLayer.value) {
         Seq(
-          "org.apache.daffodil" %% "daffodil-runtime1-layers" % daffodilVersion.value % "provided",
+          "org.apache.daffodil" %% "daffodil-runtime1-layers" % daffodilVersion.value % "provided"
         )
       } else {
         Seq()
@@ -274,7 +274,7 @@ object DaffodilPlugin extends AutoPlugin {
         // actually output logs that we care about, so this doesn't really matter
         val logMappings = Map(
           ">=3.5.0" -> "org.slf4j" % "slf4j-nop" % "2.0.9" % cfg,
-          "<3.5.0" -> "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % cfg,
+          "<3.5.0" -> "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % cfg
         )
         val logDep = filterVersions(binDaffodilVersion, logMappings).head
         Seq(dafDep, logDep)
@@ -359,7 +359,7 @@ object DaffodilPlugin extends AutoPlugin {
 
             if (!dbi.schema.startsWith("/")) {
               throw new MessageOnlyException(
-                s"daffodilPackageBinInfos schema must be a resource path that starts with '/':  ${dbi.schema}",
+                s"daffodilPackageBinInfos schema must be a resource path that starts with '/':  ${dbi.schema}"
               )
             }
 
@@ -373,7 +373,7 @@ object DaffodilPlugin extends AutoPlugin {
             // used for a particular "internal API"
             val daffodilInternalApiVersionMapping = Map(
               ">3.8.0" -> "2",
-              "<=3.8.0" -> "1",
+              "<=3.8.0" -> "1"
             )
             val internalApiVersion =
               filterVersions(daffodilVersion, daffodilInternalApiVersionMapping).head
@@ -386,7 +386,7 @@ object DaffodilPlugin extends AutoPlugin {
               dbi.schema,
               targetFile.toString,
               dbi.root.getOrElse(""),
-              dbi.config.map { _.toString }.getOrElse(""),
+              dbi.config.map { _.toString }.getOrElse("")
             )
 
             logger.info(s"compiling daffodil parser to ${targetFile} ...")
@@ -416,7 +416,7 @@ object DaffodilPlugin extends AutoPlugin {
         // parser files but do not want this warning should access
         // (packageDaffodilBin / products).value instead of packageDaffodilBin.value
         logger.warn(
-          "no saved parsers created--one or both of daffodilPackageBinInfos and daffodilPackageBinVersions are empty",
+          "no saved parsers created--one or both of daffodilPackageBinInfos and daffodilPackageBinVersions are empty"
         )
       }
       prods
@@ -464,7 +464,7 @@ object DaffodilPlugin extends AutoPlugin {
 
         if (!daffodilPackageBinVersions.value.contains(daffodilVersion.value)) {
           throw new MessageOnlyException(
-            s"daffodilPackageBinVersions (${daffodilPackageBinVersions.value.mkString(", ")}) must contain daffodilVersion (${daffodilVersion.value}) if daffodilTdmlUsesPackageBin is true",
+            s"daffodilPackageBinVersions (${daffodilPackageBinVersions.value.mkString(", ")}) must contain daffodilVersion (${daffodilVersion.value}) if daffodilTdmlUsesPackageBin is true"
           )
         }
 
@@ -506,7 +506,7 @@ object DaffodilPlugin extends AutoPlugin {
       } else {
         existingMappings
       }
-    },
+    }
   ) ++
     inConfig(Compile)(flatLayoutSettings("src")) ++
     inConfig(Test)(flatLayoutSettings("test"))
@@ -545,7 +545,7 @@ object DaffodilPlugin extends AutoPlugin {
     unmanagedResources / excludeFilter := {
       if (!daffodilFlatLayout.value) (unmanagedResources / excludeFilter).value
       else (unmanagedSources / includeFilter).value,
-    },
+    }
   )
 
   /**

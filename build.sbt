@@ -24,14 +24,14 @@ version := "1.2.0-SNAPSHOT"
 scalaVersion := "2.12.19"
 
 scalacOptions ++= Seq(
-  "-Ywarn-unused:imports",
+  "-Ywarn-unused:imports"
 )
 
 scmInfo := Some(
   ScmInfo(
     browseUrl = url("https://github.com/apache/daffodil-sbt"),
-    connection = "scm:git:https://github.com/apache/daffodil-sbt",
-  ),
+    connection = "scm:git:https://github.com/apache/daffodil-sbt"
+  )
 )
 
 licenses := Seq(License.Apache2)
@@ -48,13 +48,13 @@ crossSbtVersions := Seq("1.8.0")
 
 scriptedLaunchOpts ++= Seq(
   "-Xmx1024M",
-  "-Dplugin.version=" + version.value,
+  "-Dplugin.version=" + version.value
 )
 
 // Rat check settings
 
 ratExcludes := Seq(
-  file(".git"),
+  file(".git")
 )
 
 ratFailBinaries := true
