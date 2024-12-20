@@ -183,6 +183,18 @@ provide to the JVM used to save parsers. For example:
 packageDaffodilBin / javaOptions ++= Seq("-Xmx8G", "-Xss4m")
 ```
 
+In some cases it may be useful to enable more verbose logging when building a
+saved parser. To configure the log level, add the following to build.sbt:
+
+```scala
+packageDaffodilBin / logLevel := Level.Info
+```
+
+The above setting defaults to `Level.Warn` but can be set to `Level.Info` or
+`Level.Debug` for more verbosity. Note that this does not affect Schema
+Definition Warning or Error diagnostics--it only affects the Daffodil logging
+mechanism, usually intended for Daffodil developers.
+
 ### Saved Parsers in TDML Tests
 
 For schemas that take a long time to compile, it is often convenient to use a
