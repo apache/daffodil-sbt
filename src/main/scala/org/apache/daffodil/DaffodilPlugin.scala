@@ -397,8 +397,10 @@ object DaffodilPlugin extends AutoPlugin {
             // support this for packageDaffodilBin, we just need to get the exporter stream
             // above and write the equivalent command line to that stream. For a user to see
             // this stream, they can run "sbt 'export packageDaffodilBin'". Note that this wraps
-            // the arguments in singles quotes to support arguments that might have spaces,
-            // be empty, or have special characters.
+            // the arguments in singles quotes to support arguments that might have spaces, be
+            // empty, or have special characters. Also note that the arguments contain absolute
+            // paths and platform specific classpath separator, so the resulting command likely
+            // only works on the system where it is generated.
             exporter.println("java " + args.map(arg => s"'$arg'").mkString(" "))
 
             logger.info(s"compiling daffodil parser to ${targetFile} ...")
