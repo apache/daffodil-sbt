@@ -183,6 +183,14 @@ provide to the JVM used to save parsers. For example:
 packageDaffodilBin / javaOptions ++= Seq("-Xmx8G", "-Xss4m")
 ```
 
+It can sometimes be useful to build a saved parser using the CLI or in an IDE.
+Run the following command to output a CLI command that is equivalent to the
+`packageDaffodilBin` task:
+
+```bash
+sbt "export packageDaffodilBin"
+```
+
 ### Saved Parsers in TDML Tests
 
 For schemas that take a long time to compile, it is often convenient to use a
