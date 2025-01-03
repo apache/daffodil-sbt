@@ -270,10 +270,9 @@ object DaffodilPlugin extends AutoPlugin {
       daffodilPackageBinVersions.value.flatMap { binDaffodilVersion =>
         val cfg = ivyConfigName(binDaffodilVersion)
         val dafDep = "org.apache.daffodil" %% "daffodil-japi" % binDaffodilVersion % cfg
-        // logging backends used to hide warnings about missing backends, Daffodil won't
-        // actually output logs that we care about, so this doesn't really matter
+        // Add logging backends used when packageDaffodilBin outputs log messages
         val logMappings = Map(
-          ">=3.5.0" -> "org.slf4j" % "slf4j-nop" % "2.0.9" % cfg,
+          ">=3.5.0" -> "org.slf4j" % "slf4j-simple" % "2.0.9" % cfg,
           "<3.5.0" -> "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % cfg
         )
         val logDep = filterVersions(binDaffodilVersion, logMappings).head
@@ -406,6 +405,25 @@ object DaffodilPlugin extends AutoPlugin {
       val savedParsers = cachedFun(filesToWatch)
       savedParsers.toSeq
     },
+
+    /**
+     * SBT ignores the packageDaffodilBin / logLevel setting, so we use it as the logLevel to
+     * provide to daffodil when saving a parser. We default to warn because Daffodils "info" is
+     * usually too verbose
+     */
+    packageDaffodilBin / logLevel := Level.Warn,
+
+    /**
+     * JVM options used for the forked process to build saved parsers
+     *
+     * Defaults to just setting various system properties to configure loggers that might be
+     * used by different daffodil versions
+     */
+    packageDaffodilBin / javaOptions := Seq(
+      s"-Dorg.slf4j.simpleLogger.logFile=System.out",
+      s"-Dorg.slf4j.simpleLogger.defaultLogLevel=${(packageDaffodilBin / logLevel).value}",
+      s"-Dorg.apache.logging.log4j.level=${(packageDaffodilBin / logLevel).value}"
+    ),
     packageDaffodilBin := {
       val logger = streams.value.log
 
