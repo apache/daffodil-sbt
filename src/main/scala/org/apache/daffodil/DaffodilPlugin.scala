@@ -23,6 +23,7 @@ import scala.util.Properties
 
 import sbt.Keys._
 import sbt._
+import sbt.internal.CommandStrings.ExportStream
 
 object DaffodilPlugin extends AutoPlugin {
 
@@ -317,6 +318,7 @@ object DaffodilPlugin extends AutoPlugin {
     },
     packageDaffodilBin / products := {
       val logger = streams.value.log
+      val exporter = (packageDaffodilBin / streams).value.text(ExportStream)
 
       // options to provide to the forked JVM process used to save a processor
       val jvmArgs = (packageDaffodilBin / javaOptions).value
@@ -407,6 +409,18 @@ object DaffodilPlugin extends AutoPlugin {
               dbi.root.getOrElse(""),
               dbi.config.map { _.toString }.getOrElse("")
             )
+
+            // SBT has the concept of an "export stream"--this is a stream that an SBT task can
+            // write to to indicate its equivalent command line program and options. This is
+            // useful for debugging, allowing one to manually run an SBT task in a CLI. To
+            // support this for packageDaffodilBin, we just need to get the exporter stream
+            // above and write the equivalent command line to that stream. For a user to see
+            // this stream, they can run "sbt 'export packageDaffodilBin'". Note that this wraps
+            // the arguments in singles quotes to support arguments that might have spaces, be
+            // empty, or have special characters. Also note that the arguments contain absolute
+            // paths and platform specific classpath separator, so the resulting command likely
+            // only works on the system where it is generated.
+            exporter.println("java " + args.map(arg => s"'$arg'").mkString(" "))
 
             logger.info(s"compiling daffodil parser to ${targetFile} ...")
 
