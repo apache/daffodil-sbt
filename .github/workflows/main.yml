@@ -39,15 +39,17 @@ jobs:
       fail-fast: false
       matrix:
         java_distribution: [ temurin ]
-        java_version: [ 8, 11, 17 ]
+        java_version: [ 8, 11, 17, 21 ]
         scala_version: [ 2.12.18 ]
-        os: [ ubuntu-22.04, windows-2022, macos-12 ]
+        os: [ ubuntu-22.04, windows-2022, macos-14 ]
         exclude:
           # only run macos on java 17
-          - os: macos-12
+          - os: macos-14
             java_version: 8
-          - os: macos-12
+          - os: macos-14
             java_version: 11
+          - os: macos-14
+            java_version: 21
         include:
           - shell: bash
           - os: windows-2022
@@ -65,6 +67,10 @@ jobs:
       ############################################################
       # Setup
       ############################################################
+
+      - name: Install Dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install sbt
 
       - name: Check out Repository
         uses: actions/checkout@v4.1.1
