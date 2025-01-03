@@ -195,6 +195,19 @@ The above setting defaults to `Level.Warn` but can be set to `Level.Info` or
 Definition Warning or Error diagnostics--it only affects the Daffodil logging
 mechanism, usually intended for Daffodil developers.
 
+It can sometimes be useful to build a saved parser using the CLI or in an IDE.
+Run the following command to output a CLI command that is equivalent to the
+`packageDaffodilBin` task:
+
+```bash
+sbt "export packageDaffodilBin"
+```
+
+The resulting command can then be run manually in a CLI, copy/pasted into a
+script, configured in an IDE/debugger, etc. Note that the command contains
+absolute paths and syntax specific to the current system--it is unlikely to
+work on systems other than the one where it is generated.
+
 ### Saved Parsers in TDML Tests
 
 For schemas that take a long time to compile, it is often convenient to use a
