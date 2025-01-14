@@ -17,4 +17,4 @@
 
 addSbtPlugin("org.musigma" % "sbt-rat" % "0.7.0")
 
-addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.2")
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.3")
