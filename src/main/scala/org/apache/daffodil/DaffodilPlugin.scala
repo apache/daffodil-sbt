@@ -182,9 +182,29 @@ object DaffodilPlugin extends AutoPlugin {
       // version specifier Seq is empty, the associated dependencies are added regardless of
       // Daffodil version
       val versionedDeps = Map(
-        // always add Daffodil and junit test dependencies
-        ">=3.0.0" -> Seq(
+        // For daffodil 3.10.0 or newer, depend on daffodil-tdml-junit. This transitively pulls
+        // in daffodil-tdml-processor and gives access to the compact tdml runner API
+        ">=3.10.0" -> Seq(
+          "org.apache.daffodil" %% "daffodil-tdml-junit" % daffodilVersion.value % "test"
+        ),
+        // For older versions where daffodil-tdml-junit isn't available, depend on
+        // daffodil-tdml-processor plus an *intransitive* dependency to the 3.10.0 version of
+        // daffodil-tdml-junit. The daffodil-tdml-junit library uses an API that works with
+        // daffodil-tdml-processor 3.2.0 or newer. Note that this should be pinned to 3.10.0,
+        // since future versions of daffodil-tdml-junit might depend on a specific versions of
+        // daffodil-tdml-processor
+        ">=3.2.0 <3.10.0" -> Seq(
           "org.apache.daffodil" %% "daffodil-tdml-processor" % daffodilVersion.value % "test",
+          ("org.apache.daffodil" %% "daffodil-tdml-junit" % "3.10.0" % "test").intransitive()
+        ),
+        // The TDML Runner API that daffodil-tdml-junit-3.10.0 uses was added in Daffodil 3.2.0.
+        // So the new compact JUnit API cannot be used with 3.1.0 or older. For these projects,
+        // just add daffodil-tdml-processor so they can at least use the old TDML Runner API
+        ">=3.0.0 <3.2.0" -> Seq(
+          "org.apache.daffodil" %% "daffodil-tdml-processor" % daffodilVersion.value % "test"
+        ),
+        // junit dependencies
+        ">=3.0.0" -> Seq(
           "junit" % "junit" % "4.13.2" % "test",
           "com.github.sbt" % "junit-interface" % "0.13.2" % "test"
         ),
