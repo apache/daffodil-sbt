@@ -446,7 +446,7 @@ object DaffodilPlugin extends AutoPlugin {
      */
     artifacts ++= {
       if ((packageDaffodilBin / publishArtifact).value) {
-        (packageDaffodilBin / artifacts).value,
+        (packageDaffodilBin / artifacts).value
       } else {
         Seq()
       }
@@ -459,12 +459,12 @@ object DaffodilPlugin extends AutoPlugin {
         // the artifacts and associated files are not necessarily in the same order. For each
         // artifact, we need to find the associated file (the one that ends with the same
         // classifier and extension) and update the packagedArtifacts setting with that pair
-        val updatedPackagedArtifacts = arts.foldLeft(packagedArtifacts.value) {
-          case (pa, art) =>
+        val updatedPackagedArtifacts =
+          arts.foldLeft(packagedArtifacts.value) { case (pa, art) =>
             val suffix = s"-${art.classifier.get}.${art.extension}"
             val file = files.find { _.getName.endsWith(suffix) }.get
             pa.updated(art, file)
-        }
+          }
         updatedPackagedArtifacts
       } else {
         packagedArtifacts.value
@@ -562,7 +562,7 @@ object DaffodilPlugin extends AutoPlugin {
     },
     unmanagedResources / excludeFilter := {
       if (!daffodilFlatLayout.value) (unmanagedResources / excludeFilter).value
-      else (unmanagedSources / includeFilter).value,
+      else (unmanagedSources / includeFilter).value
     }
   )
 
