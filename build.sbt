@@ -19,7 +19,7 @@ name := "sbt-daffodil"
 
 organization := "org.apache.daffodil"
 
-version := "1.3.0"
+version := IO.read((ThisBuild / baseDirectory).value / "VERSION").trim
 
 scalaVersion := "2.12.19"
 
@@ -54,7 +54,8 @@ scriptedLaunchOpts ++= Seq(
 // Rat check settings
 
 ratExcludes := Seq(
-  file(".git")
+  file(".git"),
+  file("VERSION")
 )
 
 ratFailBinaries := true
