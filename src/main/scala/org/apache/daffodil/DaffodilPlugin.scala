@@ -129,10 +129,11 @@ object DaffodilPlugin extends AutoPlugin {
      * not override this setting, it ensures they use the same Scala version that Daffodil was
      * released with. Schema projects can override this setting if they really need a specific
      * Scala version, but that should be rare. We also take into account the minimum scala
-     * version supported by the current JDK.
+     * version supported by the current JDK, and will override with a newer version of scala if
+     * required by the JDK.
      */
     scalaVersion := {
-      val jdkMinScalaVersionMapping = Map(
+      val jdkMinScala212VersionMapping = Map(
         ">=23    " -> "2.12.20",
         ">=22 <23" -> "2.12.19",
         ">=21 <22" -> "2.12.18",
@@ -140,9 +141,19 @@ object DaffodilPlugin extends AutoPlugin {
         ">=11 <17" -> "2.12.4",
         "     <11" -> "2.12.0"
       )
+      val jdkMinScala213VersionMapping = Map(
+        ">=23    " -> "2.13.15",
+        ">=22 <23" -> "2.13.13",
+        ">=21 <22" -> "2.13.11",
+        ">=17 <21" -> "2.13.6",
+        ">=11 <17" -> "2.13.0",
+        "     <11" -> "2.13.0"
+      )
 
       val daffodilScalaVersionMapping = Map(
-        ">=3.7.0       " -> "2.12.19",
+        ">=4.0.0       " -> "2.13.16",
+        ">=3.9.0 <4.0.0" -> "2.12.20",
+        ">=3.7.0 <3.9.0" -> "2.12.19",
         ">=3.5.0 <3.7.0" -> "2.12.18",
         ">=3.4.0 <3.5.0" -> "2.12.17",
         ">=3.2.0 <3.4.0" -> "2.12.15",
@@ -153,7 +164,12 @@ object DaffodilPlugin extends AutoPlugin {
       val dafScalaVersion =
         filterVersions(daffodilVersion.value, daffodilScalaVersionMapping).head
       val jdkScalaVersion =
-        filterVersions(Properties.javaSpecVersion, jdkMinScalaVersionMapping).head
+        if (SemanticSelector("<4.0.0").matches(VersionNumber(daffodilVersion.value))) {
+          filterVersions(Properties.javaSpecVersion, jdkMinScala212VersionMapping).head
+        } else {
+          filterVersions(Properties.javaSpecVersion, jdkMinScala213VersionMapping).head
+        }
+
       if (SemanticSelector("<" + jdkScalaVersion).matches(VersionNumber(dafScalaVersion))) {
         jdkScalaVersion
       } else {
@@ -290,7 +306,17 @@ object DaffodilPlugin extends AutoPlugin {
     libraryDependencies ++= {
       daffodilPackageBinVersions.value.flatMap { binDaffodilVersion =>
         val cfg = ivyConfigName(binDaffodilVersion)
-        val dafDep = "org.apache.daffodil" %% "daffodil-japi" % binDaffodilVersion % cfg
+        // the daffodil-japi dependency must ignore the scalaVersion setting and instead use
+        // the specific version of scala used for the binDaffodilVersion. We can do this by
+        // defining the dependency with a "constant" cross version
+        val crossVersion =
+          if (SemanticSelector("<4.0.0").matches(VersionNumber(binDaffodilVersion))) {
+            CrossVersion.constant("2.12")
+          } else {
+            CrossVersion.constant("2.13")
+          }
+        val dafDep = ("org.apache.daffodil" % "daffodil-japi" % binDaffodilVersion % cfg)
+          .withCrossVersion(crossVersion)
         // Add logging backends used when packageDaffodilBin outputs log messages
         val logMappings = Map(
           ">=3.5.0" -> "org.slf4j" % "slf4j-simple" % "2.0.9" % cfg,
@@ -331,8 +357,7 @@ object DaffodilPlugin extends AutoPlugin {
       // get all dependencies and resources of this project
       val projectClasspath = (Compile / fullClasspath).value.files
 
-      // need to dropRight to remove the dollar sign in the object name
-      val mainClass = DaffodilSaver.getClass.getCanonicalName.dropRight(1)
+      val mainClass = classOf[DaffodilSaver].getCanonicalName
 
       // schema compilation can be expensive, so we only want to fork and compile the schema if
       // any of the project classpath files change
