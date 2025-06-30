@@ -121,15 +121,20 @@ public class DaffodilSaver {
     // compiler = compiler.withTunable(...)
     if (config != null) {
       DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+      factory.setNamespaceAware(true);
       DocumentBuilder builder = factory.newDocumentBuilder();
       Document document = builder.parse(config);
-      NodeList tunables = document.getElementsByTagName("tunables");
+      NodeList tunables = document.getElementsByTagNameNS("urn:ogf:dfdl:2013:imp:daffodil.apache.org:2018:ext", "tunables");
       for (int i = 0; i < tunables.getLength(); i++) {
         Node tunablesNode = tunables.item(i);
         NodeList children = tunablesNode.getChildNodes();
         for (int j = 0; j < children.getLength(); j++) {
           Node node = children.item(j);
-          compiler = compilerWithTunable.invoke(compiler, node.getNodeName(), node.getTextContent());
+          if (node.getNodeType() != Node.ELEMENT_NODE) {
+            // ignore text nodes
+            continue;
+          }
+          compiler = compilerWithTunable.invoke(compiler, node.getLocalName(), node.getTextContent().trim());
         }
       }
     }
