@@ -429,8 +429,8 @@ object DaffodilPlugin extends AutoPlugin {
         val targetFiles = daffodilPackageBinVersions.value.flatMap { daffodilVersion =>
           // get all the Daffodil jars and dependencies for the version of Daffodil associated with
           // this ivy config
-          val cfg = ivyConfigs.find { _.name == ivyConfigName(daffodilVersion) }.get
-          val daffodilJars = Classpaths.managedJars(cfg, classpathTypesVal, updateVal).files
+          val ivyCfg = ivyConfigs.find { _.name == ivyConfigName(daffodilVersion) }.get
+          val daffodilJars = Classpaths.managedJars(ivyCfg, classpathTypesVal, updateVal).files
 
           // Note that order matters here. The projectClasspath might have daffodil jars on it if
           // Daffodil is a compile dependency, which could be a different version from the version
@@ -464,6 +464,22 @@ object DaffodilPlugin extends AutoPlugin {
             val internalApiVersion =
               filterVersions(daffodilVersion, daffodilInternalApiVersionMapping).head
 
+            // If a file exists with the same name as the config option but with the ivy config
+            // name as a secondary extension (e.g. config.daffodil390.xml) then use that as the
+            // config file. Otherwise use the unmodified config setting. This is useful when
+            // different version of Daffodil require different configs.
+            val cfgOption = dbi.config
+              .map { cfg =>
+                val curName = cfg.getName
+                val index = curName.lastIndexOf(".")
+                val (baseName, ext) = if (index >= 1) curName.splitAt(index) else (curName, "")
+                val versionedName = baseName + "." + ivyCfg.name + ext
+                val versionedCfg = new File(cfg.getParentFile, versionedName)
+                if (versionedCfg.exists) versionedCfg else cfg
+              }
+              .map { _.toString }
+              .getOrElse("")
+
             val args = jvmArgs ++ Seq(
               "-classpath",
               classpathFiles.mkString(File.pathSeparator),
@@ -472,7 +488,7 @@ object DaffodilPlugin extends AutoPlugin {
               dbi.schema,
               targetFile.toString,
               dbi.root.getOrElse(""),
-              dbi.config.map { _.toString }.getOrElse("")
+              cfgOption
             )
 
             // SBT has the concept of an "export stream"--this is a stream that an SBT task can
