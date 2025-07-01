@@ -18,6 +18,6 @@
 
 > packageDaffodilBin
 $ exists target/test-0.1-daffodil350.bin
-$ exists target/test-0.1-daffodil360.bin
+$ exists target/test-0.1-daffodil3110.bin
 $ exists target/test-0.1-two-daffodil350.bin
-$ exists target/test-0.1-two-daffodil360.bin
+$ exists target/test-0.1-two-daffodil3110.bin

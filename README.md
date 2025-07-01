@@ -111,6 +111,13 @@ Path to a configuration file used during compilation, currently only used to
 specify tunables. If specified, it should usually use SBT settings to create
 the path. Defaults to `None` if not provided.
 
+If a file exists with the same name as the config option, but with a Daffodil
+version as the secondary extension (e.g. `config.daffodil390.xml`), then that
+file will be used instead of the original config file, but only when creating
+saved parsers for that specific version of Daffodil. This can be useful when
+multiple versions are specified in `daffodilPackageBinVersions` but those
+versions have configuration incompatibilities.
+
 Example:
 
 If the configuration file is in `src/main/resources/`, then use:

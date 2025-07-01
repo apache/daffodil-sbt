@@ -31,6 +31,6 @@ daffodilPackageBinInfos := {
   )
 }
 
-daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")
+daffodilPackageBinVersions := Seq("3.11.0", "3.5.0")
 
 daffodilVersion := daffodilPackageBinVersions.value.head
