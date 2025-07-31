@@ -279,7 +279,12 @@ object DaffodilPlugin extends AutoPlugin {
      */
     libraryDependencies ++= {
       if (daffodilBuildsCharset.value) {
-        Seq("org.apache.daffodil" %% "daffodil-io" % daffodilVersion.value % "provided")
+        val charsetDep = Map(
+          ">=4.0.0 " -> "org.apache.daffodil" % "daffodil-core_3" % daffodilVersion.value % "provided",
+          "=3.11.0 " -> "org.apache.daffodil" % "daffodil-io_2.13" % daffodilVersion.value % "provided",
+          "<=3.10.0 " -> "org.apache.daffodil" % "daffodil-io_2.12" % daffodilVersion.value % "provided"
+        )
+        filterVersions(daffodilVersion.value, charsetDep)
       } else {
         Seq()
       }
@@ -290,9 +295,12 @@ object DaffodilPlugin extends AutoPlugin {
      */
     libraryDependencies ++= {
       if (daffodilBuildsLayer.value) {
-        Seq(
-          "org.apache.daffodil" %% "daffodil-runtime1-layers" % daffodilVersion.value % "provided"
+        val charsetDep = Map(
+          ">=4.0.0 " -> "org.apache.daffodil" % "daffodil-core_3" % daffodilVersion.value % "provided",
+          "=3.11.0 " -> "org.apache.daffodil" % "daffodil-runtime1-layers_2.13" % daffodilVersion.value % "provided",
+          "<=3.10.0 " -> "org.apache.daffodil" % "daffodil-runtime1-layers_2.12" % daffodilVersion.value % "provided"
         )
+        filterVersions(daffodilVersion.value, charsetDep)
       } else {
         Seq()
       }
