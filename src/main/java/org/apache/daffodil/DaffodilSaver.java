@@ -84,13 +84,24 @@ public class DaffodilSaver {
     Class<?> cString = String.class;
     Class<?> cWritableByteChannel = WritableByteChannel.class;
 
+    String baseApiPackage = null;
+    switch (apiVersion) {
+      case 1:
+      case 2:
+        baseApiPackage = "org.apache.daffodil.japi";
+        break;
+      case 3:
+        baseApiPackage = "org.apache.daffodil.api";
+        break;
+    }
+
     // get the Compiler, ProcessorFactory, and DataProcessor classes and the functions we need
     // to invoke on those classes. Note that we use JAPI because its easier to use via
     // reflection than the Scala API and it is much smaller and easier to use than the lib API
-    Class<?> daffodilClass = Class.forName("org.apache.daffodil.japi.Daffodil");
+    Class<?> daffodilClass = Class.forName(baseApiPackage + ".Daffodil");
     Method daffodilCompiler = daffodilClass.getMethod("compiler");
 
-    Class<?> compilerClass = Class.forName("org.apache.daffodil.japi.Compiler");
+    Class<?> compilerClass = Class.forName(baseApiPackage + ".Compiler");
     Method compilerWithTunable = compilerClass.getMethod("withTunable", cString, cString);
     // the compileResource method added in Daffodil 3.9.0 allows for depersonalized diagnostics
     // and better reproducibility of saved parsers--use it instead of compileSource for newer
@@ -101,19 +112,24 @@ public class DaffodilSaver {
         compilerCompile = compilerClass.getMethod("compileSource", cURI, cString, cString);
         break;
       case 2:
+      case 3:
         compilerCompile = compilerClass.getMethod("compileResource", cString, cString, cString);
         break;
     }
 
-    Class<?> processorFactoryClass = Class.forName("org.apache.daffodil.japi.ProcessorFactory");
+    Class<?> processorFactoryClass = Class.forName(baseApiPackage + ".ProcessorFactory");
     Method processorFactoryIsError = processorFactoryClass.getMethod("isError");
     Method processorFactoryOnPath = processorFactoryClass.getMethod("onPath", cString);
     Method processorFactoryGetDiagnostics = processorFactoryClass.getMethod("getDiagnostics");
 
-    Class<?> dataProcessorClass = Class.forName("org.apache.daffodil.japi.DataProcessor");
+    Class<?> dataProcessorClass = Class.forName(baseApiPackage + ".DataProcessor");
     Method dataProcessorIsError = dataProcessorClass.getMethod("isError");
     Method dataProcessorSave = dataProcessorClass.getMethod("save", cWritableByteChannel);
     Method dataProcessorGetDiagnostics = processorFactoryClass.getMethod("getDiagnostics");
+
+    Class<?> diagnosticClass = Class.forName(baseApiPackage + ".Diagnostic");
+    Method diagnosticIsError = diagnosticClass.getMethod("isError");
+    Method diagnosticToString = diagnosticClass.getMethod("toString");
 
     // val compiler = Daffodil.compiler()
     Object compiler = daffodilCompiler.invoke(null);
@@ -147,6 +163,7 @@ public class DaffodilSaver {
         schemaArg = schemaUrl.toURI();
         break;
       case 2:
+      case 3:
         schemaArg = schemaResource;
         break;
     }
@@ -154,7 +171,7 @@ public class DaffodilSaver {
 
     // val processorFactoryDiags = processorFactory.getDiagnostics()
     List<?> processorFactoryDiags = (List<?>) processorFactoryGetDiagnostics.invoke(processorFactory);
-    printDiagnostics(processorFactoryDiags);
+    printDiagnostics(processorFactoryDiags, diagnosticClass, diagnosticIsError, diagnosticToString);
 
     // if (processorFactory.isError) System.exit(1)
     if ((boolean) processorFactoryIsError.invoke(processorFactory)) System.exit(1);
@@ -164,7 +181,7 @@ public class DaffodilSaver {
 
     // val dataProcessorDiags = dataProcessor.getDiagnostics()
     List<?> dataProcessorDiags = (List<?>) dataProcessorGetDiagnostics.invoke(dataProcessor);
-    printDiagnostics(dataProcessorDiags);
+    printDiagnostics(dataProcessorDiags, diagnosticClass, diagnosticIsError, diagnosticToString);
 
     // if (dataProcessor.isError) System.exit(1)
     if ((boolean) dataProcessorIsError.invoke(dataProcessor)) System.exit(1);
@@ -176,10 +193,10 @@ public class DaffodilSaver {
   }
 
 
-  static private void printDiagnostics(List<?> diags) throws Exception {
-    Class<?> diagnosticClass = Class.forName("org.apache.daffodil.japi.Diagnostic");
-    Method diagnosticIsError = diagnosticClass.getMethod("isError");
-    Method diagnosticToString = diagnosticClass.getMethod("toString");
+  static private void printDiagnostics(List<?> diags,
+      Class<?> diagnosticClass,
+      Method diagnosticIsError,
+      Method diagnosticToString) throws Exception {
 
     for (Object d : diags) {
       String msg = (String) diagnosticToString.invoke(d);
