@@ -187,7 +187,7 @@ object DaffodilPlugin extends AutoPlugin {
 
       // versions of scala each version of Daffodil was released with
       val daffodilToScalaVersion = Map(
-        ">=4.0.0" -> "3.3.5",
+        ">=4.0.0" -> "3.3.6",
         "=3.11.0" -> "2.13.16",
         "=3.10.0" -> "2.12.20",
         "=3.9.0 " -> "2.12.20",
@@ -346,17 +346,14 @@ object DaffodilPlugin extends AutoPlugin {
     libraryDependencies ++= {
       daffodilPackageBinVersions.value.flatMap { binDaffodilVersion =>
         val cfg = ivyConfigName(binDaffodilVersion)
-        // the daffodil-japi dependency must ignore the scalaVersion setting and instead use
-        // the specific version of scala used for the binDaffodilVersion. We can do this by
-        // defining the dependency with a "constant" cross version
-        val daffodilToCrossVersion = Map(
-          ">=4.0.0 " -> "3",
-          "=3.11.0 " -> "2.13",
-          "<=3.10.0" -> "2.12"
+        // the Daffodil dependency must ignore the scalaVersion setting and instead use
+        // the specific version of scala used for the binDaffodilVersion.
+        val daffodilToPackageBinDep = Map(
+          ">=4.0.0 " -> "org.apache.daffodil" % "daffodil-core_3" % binDaffodilVersion % cfg,
+          "=3.11.0 " -> "org.apache.daffodil" % "daffodil-japi_2.13" % binDaffodilVersion % cfg,
+          "<=3.10.0 " -> "org.apache.daffodil" % "daffodil-japi_2.12" % binDaffodilVersion % cfg
         )
-        val crossVersion = filterVersions(binDaffodilVersion, daffodilToCrossVersion).head
-        val dafDep = ("org.apache.daffodil" % "daffodil-japi" % binDaffodilVersion % cfg)
-          .withCrossVersion(CrossVersion.constant(crossVersion))
+        val dafDep = filterVersions(binDaffodilVersion, daffodilToPackageBinDep).head
         // Add logging backends used when packageDaffodilBin outputs log messages
         val daffodilToLogDependency = Map(
           ">=3.5.0" -> "org.slf4j" % "slf4j-simple" % "2.0.9" % cfg,
@@ -458,7 +455,8 @@ object DaffodilPlugin extends AutoPlugin {
             // where API functions to use. This is the mapping for which Daffodil API should be
             // used for a particular "internal API"
             val daffodilInternalApiVersionMapping = Map(
-              ">3.8.0" -> "2",
+              ">=4.0.0" -> "3",
+              ">=3.9.0 <=3.11.0" -> "2",
               "<=3.8.0" -> "1"
             )
             val internalApiVersion =
