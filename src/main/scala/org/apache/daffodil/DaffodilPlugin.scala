@@ -309,7 +309,11 @@ object DaffodilPlugin extends AutoPlugin {
      */
     libraryDependencies ++= {
       if (daffodilBuildsUDF.value) {
-        Seq("org.apache.daffodil" %% "daffodil-udf" % daffodilVersion.value % "provided")
+        val udfDep = Map(
+          ">=4.0.0 " -> "org.apache.daffodil" %% "daffodil-core" % daffodilVersion.value % "provided",
+          "<=3.11.0 " -> "org.apache.daffodil" %% "daffodil-udf" % daffodilVersion.value % "provided"
+        )
+        filterVersions(daffodilVersion.value, udfDep)
       } else {
         Seq()
       }
