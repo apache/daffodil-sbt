@@ -16,6 +16,12 @@
 ## under the License.
 ## 
 
+> set daffodilVersion := "3.11.0"
+> packageDaffodilBin
+$ exists target/test-0.1-daffodil3110.bin
+> test
+> clean
+
 > set daffodilVersion := "3.10.0"
 > packageDaffodilBin
 $ exists target/test-0.1-daffodil3100.bin
