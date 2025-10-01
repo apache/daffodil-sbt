@@ -15,24 +15,19 @@
  * limitations under the License.
  */
 
-version := "0.1"
-
-name := "test"
-
-organization := "com.example"
-
-// tells SBT to build a jar and put it on the classpath instead of putting src/main/resources on
-// the classpath. This means schema resource paths will resolve to a path inside a jar instead
-// of to a file
-exportJars := true
-
-enablePlugins(DaffodilPlugin)
-
-daffodilPackageBinInfos := Seq(
-  DaffodilBinInfo("/test.dfdl.xsd"),
-  DaffodilBinInfo("/test.dfdl.xsd", Some("test02"), Some("two"))
-)
-
-daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")
-
-daffodilVersion := daffodilPackageBinVersions.value.head
+val test = (project in file("."))
+  .settings(
+    version := "0.1",
+    name := "test",
+    organization := "com.example",
+    // tells SBT to build a jar and put it on the classpath instead of putting src/main/resources on
+    // the classpath. This means schema resource paths will resolve to a path inside a jar instead
+    // of to a file
+    exportJars := true,
+    daffodilPackageBinInfos := Seq(
+      DaffodilBinInfo("/test.dfdl.xsd"),
+      DaffodilBinInfo("/test.dfdl.xsd", Some("test02"), Some("two"))
+    ),
+    daffodilVersion := "3.6.0",
+  )
+  .daffodilProject(crossDaffodilVersions = Seq("3.5.0"))

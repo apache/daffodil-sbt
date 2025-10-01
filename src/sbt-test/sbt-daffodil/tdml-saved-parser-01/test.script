@@ -17,9 +17,7 @@
 ## 
 
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil350.bin
 $ exists target/test-0.1-daffodil360.bin
-$ exists target/test-0.1-two-daffodil350.bin
 $ exists target/test-0.1-two-daffodil360.bin
 
 > Test/compile
@@ -27,3 +25,13 @@ $ must-mirror target/test-classes/test.bin target/test-0.1-daffodil360.bin
 $ must-mirror target/test-classes/test-two.bin target/test-0.1-two-daffodil360.bin
 
 > test
+
+> test_daffodil350/packageDaffodilBin
+$ exists target/daffodil350/test-0.1-daffodil350.bin
+$ exists target/daffodil350/test-0.1-two-daffodil350.bin
+
+> test_daffodil350/Test/compile
+$ must-mirror target/daffodil350/test-classes/test.bin target/daffodil350/test-0.1-daffodil350.bin
+$ must-mirror target/daffodil350/test-classes/test-two.bin target/daffodil350/test-0.1-two-daffodil350.bin
+
+> test_daffodil350/Test/test

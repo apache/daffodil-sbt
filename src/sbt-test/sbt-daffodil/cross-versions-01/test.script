@@ -1,0 +1,56 @@
+## Licensed to the Apache Software Foundation (ASF) under one
+## or more contributor license agreements.  See the NOTICE file
+## distributed with this work for additional information
+## regarding copyright ownership.  The ASF licenses this file
+## to you under the Apache License, Version 2.0 (the
+## "License"); you may not use this file except in compliance
+## with the License.  You may obtain a copy of the License at
+## 
+##  http://www.apache.org/licenses/LICENSE-2.0
+## 
+## Unless required by applicable law or agreed to in writing,
+## software distributed under the License is distributed on an
+## "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+## KIND, either express or implied.  See the License for the
+## specific language governing permissions and limitations
+## under the License.
+## 
+
+> package
+$ exists target/test-plugin-0.1-daffodil3100.jar
+$ exists target/classes/OnlyScala212.class
+$ exists target/classes/AllScala.class
+
+$ absent target/daffodil3110/test-plugin-0.1-daffodil3110.jar
+$ absent target/daffodil3110/classes/OnlyScala213.class
+$ absent target/daffodil3110/classes/AllScala.class
+
+$ absent target/daffodil400/test-plugin-0.1-daffodil400.jar
+$ absent target/daffodil400/classes/OnlyScala3.class
+$ absent target/daffodil400/classes/AllScala.class
+
+> test_daffodil3110/package
+$ exists target/daffodil3110/test-plugin-0.1-daffodil3110.jar
+$ exists target/daffodil3110/classes/OnlyScala213.class
+$ exists target/daffodil3110/classes/AllScala.class
+
+> test_daffodil400/package
+$ exists target/daffodil400/test-plugin-0.1-daffodil400.jar
+$ exists target/daffodil400/classes/OnlyScala3.class
+$ exists target/daffodil400/classes/AllScala.class
+
+> clean
+> set aggregate := true
+> package
+
+$ exists target/test-plugin-0.1-daffodil3100.jar
+$ exists target/classes/OnlyScala212.class
+$ exists target/classes/AllScala.class
+
+$ exists target/daffodil3110/test-plugin-0.1-daffodil3110.jar
+$ exists target/daffodil3110/classes/OnlyScala213.class
+$ exists target/daffodil3110/classes/AllScala.class
+
+$ exists target/daffodil400/test-plugin-0.1-daffodil400.jar
+$ exists target/daffodil400/classes/OnlyScala3.class
+$ exists target/daffodil400/classes/AllScala.class

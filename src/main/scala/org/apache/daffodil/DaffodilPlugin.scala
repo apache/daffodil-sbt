@@ -24,6 +24,7 @@ import scala.util.Properties
 import sbt.Keys._
 import sbt._
 import sbt.internal.CommandStrings.ExportStream
+import sbt.librarymanagement.Artifact.{ DocClassifier, SourceClassifier }
 
 object DaffodilPlugin extends AutoPlugin {
 
@@ -32,7 +33,8 @@ object DaffodilPlugin extends AutoPlugin {
       "Information used to create compiled parsers"
     )
     val daffodilPackageBinVersions = settingKey[Seq[String]](
-      "Versions of daffodil to create saved parsers for"
+      "Version of daffodil to create saved parsers for. Should only contain a single version--" +
+        "specifying multiple versions is deprecated in favor of .daffodilProject(crossDaffodilVersions = ...)"
     )
     val packageDaffodilBin = taskKey[Seq[File]](
       "Package daffodil saved parsers"
@@ -49,11 +51,20 @@ object DaffodilPlugin extends AutoPlugin {
     val daffodilBuildsUDF = settingKey[Boolean](
       "Whether or not the project builds a user defined function"
     )
+    val daffodilBuildsPlugin = Def.setting {
+      // this is a helper to check if a project builds any kind of plugin. This can be accessed
+      // like a setting but users cannot change the value. Instead they should change one or
+      // more of the daffildBuilds* settings
+      daffodilBuildsCharset.value || daffodilBuildsLayer.value || daffodilBuildsUDF.value
+    }
     val daffodilFlatLayout = settingKey[Boolean](
       "Whether or not to use a flat schema project layout that uses src/ and test/ root directories containing a mix of sources and resources"
     )
     val daffodilTdmlUsesPackageBin = settingKey[Boolean](
       "Whether or not TDML files use the saved parsers created by daffodilPackageBin"
+    )
+    val daffodilPluginDependencies = settingKey[Seq[ModuleID]](
+      "Dependendies to Daffodil plugins. This should not include the Daffodil version suffix"
     )
 
     /**
@@ -77,6 +88,17 @@ object DaffodilPlugin extends AutoPlugin {
         name = t._3
       )
     }
+
+    /**
+     * Allows calling .daffodilProject(...) on an existing SBT Project to convert it to a
+     * Daffodil project. This enables the DaffodilPlugin for the project, sets a number of
+     * settings, and adds support for daffodil cross versioned subprojects
+     */
+    implicit class DaffodilProjectOps(val root: Project) extends AnyVal {
+      def daffodilProject(crossDaffodilVersions: Seq[String] = Nil): DaffodilProject = {
+        DaffodilProject(root, crossDaffodilVersions)
+      }
+    }
   }
 
   /**
@@ -93,19 +115,20 @@ object DaffodilPlugin extends AutoPlugin {
   import autoImport._
 
   /**
-   * Generate a daffodil version specific ivy configuration string by removing everything
-   * except for alphanumeric characters
+   * Generate string based on a daffodil version that can be used to identify something intended
+   * for a use with a specific version of daffodil. This can be used in many places with
+   * different limitations, so we remove non alphanumeric characters and make it lowerse.
    */
-  def ivyConfigName(daffodilVersion: String): String = {
-    "daffodil" + daffodilVersion.replaceAll("[^a-zA-Z0-9]", "")
+  def daffodilVersionId(daffodilVersion: String): String = {
+    "daffodil" + daffodilVersion.replaceAll("[^a-zA-Z0-9]", "").toLowerCase
   }
 
   /**
    * generate an artifact classifier name using the optional name and daffodil version
    */
   def classifierName(optName: Option[String], daffodilVersion: String): String = {
-    val cfg = ivyConfigName(daffodilVersion)
-    (optName.toSeq ++ Seq(cfg)).mkString("-")
+    val versionId = daffodilVersionId(daffodilVersion)
+    (optName.toSeq ++ Seq(versionId)).mkString("-")
   }
 
   /**
@@ -320,14 +343,31 @@ object DaffodilPlugin extends AutoPlugin {
     },
 
     /**
+     * Modify libraryDependencies to add dependencies to Daffodil plugins this project has. The
+     * plugin dependencies are modified to use a version compatible with daffodilVersion by
+     * specifying the appropriate classifer based on the daffodil version. It also adds plugin
+     * dependencies to the "provided" scope so that other schema projects can depend on this
+     * schema project with a potentially different version of Daffodil and the plugins. This
+     * does mean that if schema project A depends on plugin Foo, and schema project B depends on
+     * project A, then project B must also list Foo as a daffodilPluginDependency.
+     */
+    libraryDependencies ++= {
+      daffodilPluginDependencies.value.map { pluginModuleID =>
+        pluginModuleID
+          .classifier(daffodilVersionId(daffodilVersion.value))
+          .withConfigurations(Some("provided"))
+      }
+    },
+
+    /**
      * DFDL schemas are not scala version specific since they just contain resources, so we
      * disable crossPaths so that published jars do not contain a scala version. However, if a
-     * project builds layers or UDFs, then we do need to enable crossPaths since those might be
-     * implemented in Scala and so is version dependent. If they are implemented purely in Java,
-     * projects can override this and change the setting to false if they don't want the scala
-     * version in the jar name.
+     * project builds any plugins (i.e. charset, layers, UDFs) then we do need to enable
+     * crossPaths since those might be implemented in Scala and so is version dependent. If they
+     * are implemented purely in Java, projects can override this and change the setting to
+     * false if they don't want the scala version in the jar name.
      */
-    crossPaths := (daffodilBuildsCharset.value || daffodilBuildsLayer.value || daffodilBuildsUDF.value),
+    crossPaths := daffodilBuildsPlugin.value,
 
     /**
      * Enable verbose logging for junit tests
@@ -346,16 +386,21 @@ object DaffodilPlugin extends AutoPlugin {
     daffodilPackageBinVersions := Seq(),
 
     /**
+     * Default to no Daffodil plugins
+     */
+    daffodilPluginDependencies := Seq(),
+
+    /**
      * define and configure a custom Ivy configuration with dependencies to the Daffodil
      * versions we need, getting us easy access to the Daffodil jars and its dependencies
      */
     ivyConfigurations ++= daffodilPackageBinVersions.value.map { daffodilVersion =>
-      val cfg = ivyConfigName(daffodilVersion)
+      val cfg = daffodilVersionId(daffodilVersion)
       Configuration.of(cfg.capitalize, cfg)
     }.toSeq,
     libraryDependencies ++= {
       daffodilPackageBinVersions.value.flatMap { binDaffodilVersion =>
-        val cfg = ivyConfigName(binDaffodilVersion)
+        val cfg = daffodilVersionId(binDaffodilVersion)
         // the Daffodil dependency must ignore the scalaVersion setting and instead use
         // the specific version of scala used for the binDaffodilVersion.
         val daffodilToPackageBinDep = Map(
@@ -378,6 +423,12 @@ object DaffodilPlugin extends AutoPlugin {
      * define the artifacts, products, and the packageDaffodilBin task that creates the artifacts/products
      */
     packageDaffodilBin / artifacts := {
+      val logger = sLog.value
+      if (daffodilPackageBinVersions.value.length > 1) {
+        logger.warn(
+          "Specifying multiple values for daffodilPackageBinVersions is deprecated. Instead use .daffodilProject(crossDaffodilVersions = ...)"
+        )
+      }
       daffodilPackageBinVersions.value.flatMap { daffodilVersion =>
         daffodilPackageBinInfos.value.map { dbi =>
           // each artifact has the same name as the jar, in the "parser" type, "bin" extension,
@@ -436,7 +487,7 @@ object DaffodilPlugin extends AutoPlugin {
         val targetFiles = daffodilPackageBinVersions.value.flatMap { daffodilVersion =>
           // get all the Daffodil jars and dependencies for the version of Daffodil associated with
           // this ivy config
-          val ivyCfg = ivyConfigs.find { _.name == ivyConfigName(daffodilVersion) }.get
+          val ivyCfg = ivyConfigs.find { _.name == daffodilVersionId(daffodilVersion) }.get
           val daffodilJars = Classpaths.managedJars(ivyCfg, classpathTypesVal, updateVal).files
 
           // Note that order matters here. The projectClasspath might have daffodil jars on it if
@@ -596,7 +647,7 @@ object DaffodilPlugin extends AutoPlugin {
 
     /**
     * If daffodilTdmlUsesPackageBin is true, we create a resource generator to build the saved
-    * parsers and add them as a resource for the TDML files to find and use. Note that we use a
+    * parsers and adds them as a resource for the TDML files to find and use. Note that we use a
     * resourceGenerator since other methods make it difficult to convince IntelliJ to put the
     * files on the test classpath. See below Test/packageBin/mappings for related changes.
      */
@@ -665,18 +716,24 @@ object DaffodilPlugin extends AutoPlugin {
    * If daffodilFlatLayout is false, this returns each of the settings unchanged.
    */
   def flatLayoutSettings(dir: String) = Seq(
+    sourceDirectory := {
+      if (!daffodilFlatLayout.value) sourceDirectory.value
+      else {
+        baseDirectory.value / dir
+      }
+    },
     unmanagedSourceDirectories := {
       if (!daffodilFlatLayout.value) unmanagedSourceDirectories.value
       else {
         nonFlatWarning(Keys.sLog.value, unmanagedSourceDirectories.value)
-        Seq(baseDirectory.value / dir)
+        Seq(sourceDirectory.value)
       }
     },
     unmanagedResourceDirectories := {
       if (!daffodilFlatLayout.value) unmanagedResourceDirectories.value
       else {
         nonFlatWarning(Keys.sLog.value, unmanagedResourceDirectories.value)
-        unmanagedSourceDirectories.value
+        Seq(sourceDirectory.value)
       }
     },
     unmanagedSources / includeFilter := {
@@ -698,6 +755,155 @@ object DaffodilPlugin extends AutoPlugin {
   private def nonFlatWarning(logger: Logger, dirsThatShouldNotExist: Seq[File]): Unit = {
     dirsThatShouldNotExist.filter(_.exists).foreach { dir =>
       logger.warn("daffodilFlatLayout is true, but the layout does not look flat: " + dir)
+    }
+  }
+
+  class DaffodilProject(rootProject: Project, crossProjects: Seq[Project])
+    extends CompositeProject {
+
+    /**
+     * the way to return multiple projects as a single Project to SBT is via the
+     * componentProjects function of CompositeProject
+     */
+    def componentProjects: Seq[Project] = rootProject +: crossProjects
+
+    /**
+     * Provide a way to get a reference to a subproject based on its daffodilVersion. This should
+     * not be needed often, but could be used to change a setting for only a subproject, e.g.
+     *
+     *   val format = (project in file("."))
+     *     .settings(...)
+     *     .daffodilProject(crossDaffodilVersions = Seq("4.0.0")
+     *
+     *   format.daffodil("4.0.0") / packageDaffodilBin / publishArtifact := false
+     */
+    def daffodil(version: String): Project = {
+      val crossVersionId = rootProject.id + "_" + daffodilVersionId(version)
+      crossProjects
+        .find(_.id == crossVersionId)
+        .getOrElse(sys.error(s"No crossDaffodilVersion defined for $version"))
+    }
+  }
+
+  object DaffodilProject {
+
+    /**
+     * Converts the root SBT Project into a "daffodil project". Additionally, for each
+     * crossVersion defined, an project is created that shares most of the settings with the
+     * root project with minor tweaks to support building/testing/publishing/etc. with different
+     * versions of Daffodil
+     */
+    def apply(root: Project, crossVersions: Seq[String]): DaffodilProject = {
+
+      // Settings that we will inject into both the root project and all daffodil cross version
+      // projects
+      val sharedProjectSettings = Seq(
+        // daffodil plugin jars are tied to a specific version of Daffodil due to API and Scala
+        // version differences. If this project builds a plugin then we add a classifier that
+        // defines the daffodil version. This is similar to how we use classifiers for saved
+        // parser artifacts.
+        packageBin / artifactClassifier := {
+          if (daffodilBuildsPlugin.value)
+            Some(daffodilVersionId(daffodilVersion.value))
+          else
+            None
+        },
+        packageSrc / artifactClassifier := {
+          if (daffodilBuildsPlugin.value)
+            Some(daffodilVersionId(daffodilVersion.value) + "-" + SourceClassifier)
+          else
+            Some(SourceClassifier)
+        },
+        packageDoc / artifactClassifier := {
+          if (daffodilBuildsPlugin.value)
+            Some(daffodilVersionId(daffodilVersion.value) + "-" + DocClassifier)
+          else
+            Some(DocClassifier)
+        },
+
+        // The above changes the name so that projects that build daffodil plugins include the
+        // cross version id in it. We no longer need crossPaths since the daffodil version
+        // provides enough differentiation, and each Daffodil version only supports a single
+        // Scala version.
+        crossPaths := false,
+
+        // Add src/{main,test}/{scala,java}-daffodil-$daffodilVersion as additional source
+        // directories. This directories can be used for Daffodil version specific code and is
+        // only used for a single cross version project.
+        Compile / unmanagedSourceDirectories ++= (Compile / unmanagedSourceDirectories).value
+          .map { d =>
+            d.getParentFile / (d.name + "-daffodil-" + daffodilVersion.value)
+          },
+        Test / unmanagedSourceDirectories ++= (Test / unmanagedSourceDirectories).value.map {
+          d =>
+            d.getParentFile / (d.name + "-daffodil-" + daffodilVersion.value)
+        },
+
+        // set daffodilPackageBinVersions to the version of daffodil this project uses. Saved
+        // parsers will only be created if daffodilPackageBinInfos is set
+        daffodilPackageBinVersions := Seq(daffodilVersion.value)
+      )
+
+      // Settings only used for cross version projects
+      val crossProjectSettings = Seq(
+        // We use the same baseDirectory as the root project so that all of the sources are
+        // shared. However, we need a separate target directory to store managed artifacts--we
+        // put that nested inside the target directory of the root.
+        baseDirectory := (root / baseDirectory).value,
+        target := (root / target).value / daffodilVersionId(daffodilVersion.value),
+
+        // Disable publishing for subprojects. Subproject artificats (e.g. cross versions
+        // plugins or saved parsers) have the same name as the root project but with different
+        // classifiers (i.e. daffodilXYZ) and are published along with the root project.
+        publish := {},
+        publishLocal := {},
+        publishM2 := {},
+        publish / skip := true
+      )
+
+      // create a subproject for each of the daffodil cross versions. Each subproject is a clone
+      // of the root project with tweaks to some settings. Note that SBT requires that each
+      // project have a different base directory. This base directory is only used for build
+      // artifacts so we put it inside the target directory of the root project
+      val crossProjects = crossVersions.map { version =>
+        val crossVersionId = daffodilVersionId(version)
+        val crossProjectId = root.id + "_" + crossVersionId
+        val crossProjectBase = root.base.getAbsoluteFile / "target" / crossVersionId
+        val crossProject = root
+          .withId(crossProjectId)
+          .in(crossProjectBase)
+          .settings(sharedProjectSettings: _*)
+          .settings(crossProjectSettings: _*)
+          .settings(daffodilVersion := version)
+          .enablePlugins(DaffodilPlugin)
+        crossProject
+      }
+
+      val rootProjectSettings = Seq(
+        // publish cross versioned artifacts with the root project artifacts. This is important
+        // since all projects have the same name, differing only in classifiers, so we cannot
+        // publish subprojects separately since most artifact repositories do not support
+        // publishing additional artifacts after a jar has already been published
+        crossProjects.flatMap { project =>
+          Seq(
+            artifacts ++= (project / artifacts).value,
+            packagedArtifacts ++= (project / packagedArtifacts).value
+          )
+        }
+      ).flatten
+
+      // Create the root project. We intentionally aggregate() the cross projects, but the set
+      // the "aggregate" setting to false--this way users must either explicitly trigger a task
+      // in a cross project or change the aggregate setting before running a task if they want
+      // aggregation, e.g. sbt "set test/aggregate" test
+      val rootProject = root
+        .aggregate(crossProjects.map(_.project): _*)
+        .settings(aggregate := false)
+        .settings(sharedProjectSettings: _*)
+        .settings(rootProjectSettings: _*)
+        .enablePlugins(DaffodilPlugin)
+
+      new DaffodilProject(rootProject, crossProjects)
     }
   }
 

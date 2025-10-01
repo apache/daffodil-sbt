@@ -15,14 +15,12 @@
  * limitations under the License.
  */
 
-version := "0.1"
-
-name := "test"
-
-organization := "com.example"
-
-enablePlugins(DaffodilPlugin)
-
-daffodilVersion := "3.6.0"
-
-daffodilFlatLayout := true
+val test = (project in file("."))
+  .settings(
+    version := "0.1",
+    name := "test",
+    organization := "com.example",
+    daffodilVersion := "3.6.0",
+    daffodilFlatLayout := true,
+  )
+  .daffodilProject()
