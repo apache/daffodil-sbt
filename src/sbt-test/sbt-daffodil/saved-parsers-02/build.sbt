@@ -15,20 +15,16 @@
  * limitations under the License.
  */
 
-version := "0.1"
-
-name := "test"
-
-organization := "com.example"
-
-enablePlugins(DaffodilPlugin)
-
-// same as saved-parsers-01 but uses the old tuple syntax
-daffodilPackageBinInfos := Seq(
-  ("/test.dfdl.xsd", None, None),
-  ("/test.dfdl.xsd", Some("test02"), Some("two"))
-)
-
-daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")
-
-daffodilVersion := daffodilPackageBinVersions.value.head
+val test = (project in file("."))
+  .settings(
+    version := "0.1",
+    name := "test",
+    organization := "com.example",
+    // same as saved-parsers-01 but uses the old tuple syntax
+    daffodilPackageBinInfos := Seq(
+      ("/test.dfdl.xsd", None, None),
+      ("/test.dfdl.xsd", Some("test02"), Some("two"))
+    ),
+    daffodilVersion := "3.6.0",
+  )
+  .daffodilProject(crossDaffodilVersions = Seq("3.5.0"))

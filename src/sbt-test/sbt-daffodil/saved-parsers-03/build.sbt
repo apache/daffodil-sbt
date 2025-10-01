@@ -15,22 +15,18 @@
  * limitations under the License.
  */
 
-version := "0.1"
-
-name := "test"
-
-organization := "com.example"
-
-enablePlugins(DaffodilPlugin)
-
-daffodilPackageBinInfos := {
-  val config = Some((Compile / resourceDirectory).value / "test.cfg")
-  Seq(
-    DaffodilBinInfo("/test.dfdl.xsd", config = config),
-    DaffodilBinInfo("/test.dfdl.xsd", Some("test02"), Some("two"), config = config)
+val test = (project in file("."))
+  .settings(
+    version := "0.1",
+    name := "test",
+    organization := "com.example",
+    daffodilPackageBinInfos := {
+      val config = Some((Compile / resourceDirectory).value / "test.cfg")
+      Seq(
+        DaffodilBinInfo("/test.dfdl.xsd", config = config),
+        DaffodilBinInfo("/test.dfdl.xsd", Some("test02"), Some("two"), config = config)
+      )
+    },
+    daffodilVersion := "3.11.0",
   )
-}
-
-daffodilPackageBinVersions := Seq("3.11.0", "3.5.0")
-
-daffodilVersion := daffodilPackageBinVersions.value.head
+  .daffodilProject(crossDaffodilVersions = Seq("3.5.0"))

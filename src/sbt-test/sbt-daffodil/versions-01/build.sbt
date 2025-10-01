@@ -15,16 +15,13 @@
  * limitations under the License.
  */
 
-version := "0.1"
-
-name := "test"
-
-organization := "com.example"
-
-enablePlugins(DaffodilPlugin)
-
-daffodilPackageBinInfos := Seq(
-  DaffodilBinInfo("/com/example/test.dfdl.xsd")
-)
-
-daffodilPackageBinVersions := Seq(daffodilVersion.value)
+val test = (project in file("."))
+  .settings(
+    version := "0.1",
+    name := "test",
+    organization := "com.example",
+    daffodilPackageBinInfos := Seq(
+      DaffodilBinInfo("/com/example/test.dfdl.xsd")
+    ),
+  )
+  .daffodilProject()

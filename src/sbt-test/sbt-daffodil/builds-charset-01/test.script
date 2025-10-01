@@ -17,9 +17,9 @@
 ## 
 
 
-# builds jar, with _2.12 in the name beause charsets are scala version specific
+# builds jar, with daffodilXYZ classifier because charsets are daffodil version specific
 > package
-$ exists target/scala-2.12/test_2.12-0.1.jar
+$ exists target/test-0.1-daffodil360.jar
 
 # expect compilation to fail without this setting
 > set daffodilBuildsCharset := false

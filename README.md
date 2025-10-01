@@ -27,10 +27,13 @@ To enable the plugin, add the following to `project/plugins.sbt`:
 addSbtPlugin("org.apache.daffodil" % "sbt-daffodil" % "<version>")
 ```
 
-And add the following to `build.sbt`:
+And define a project using the modern SBT project syntax in `build.sbt`,
+followed by a call to `daffodilProject()`:
 
 ```scala
-enablePlugins(DaffodilPlugin)
+val format = (project in file("."))
+  .settings(...)
+  .daffodilProject()
 ```
 
 ## Features
@@ -143,35 +146,18 @@ daffodilPackageBinInfos := Seq(
 )
 ```
 
-You must also define which versions of Daffodil to build comptiable saved
-parsers using the `daffodilPackageBinVersions` setting. For example, to build
-saved parsers for Daffodil 3.6.0 and 3.5.0:
-
-```scala
-daffodilPackageBinVersions := Seq("3.6.0", "3.5.0")
-```
-
 Then run `sbt packageDaffodilBin` to generate saved parsers in the `target/`
-directory. For example, assuming a schema project with name of "format",
-version set to "1.0", and the above configurations, the task would generate the
-following saved parsers:
+directory. For example, assuming a schema project with `name := "format"`,
+`version := "1.0"`, and `daffodilVersion := "3.5.0"`, and the above
+configuration, the task would generate the following saved parsers:
 
 ```
 target/format-1.0-daffodil350.bin
-target/format-1.0-daffodil360.bin
 target/format-1.0-file-daffodil350.bin
-target/format-1.0-file-daffodil360.bin
 ```
 
-Note that the artifact names have the suffix "daffodilXYZ".bin, where XYZ is
-the version of Daffodil the saved parser is compatible with.
-
-If used, one may want to use the first value of this setting to configure
-`daffodilVersion`, e.g.:
-
-```scala
-daffodilVersion := daffodilPackageBinVersions.value.head
-```
+The saved parser artifact names have the suffix `daffodilXYZ.bin`, where `XYZ`
+is the version of Daffodil the saved parser is compatible with.
 
 The `publish`, `publishLocal`, `publishM2` and related publish tasks are
 modified to automatically build and publish the saved parsers as new artifacts.
@@ -237,20 +223,18 @@ is referenced like this:
 <parserTestCase ... model="/format-file.bin">
 ```
 
-Note that only saved parsers for `daffodilVersion` can be referenced. For this
-reason, `daffodilVersion` must also be defined in `daffodilPackageBinVersions`
-if `daffodilTdmlUsesPackageBin` is `true`.
-
-This is implemented using a SBT resource generator which some IDE's, like
+This is implemented using a SBT resource generator which some IDEs, like
 IntelliJ, do not trigger during builds. So you must either run `sbt Test/compile`
 to manually trigger the resource generator, or let SBT handle builds by
 enabling the "Use SBT shell for builds" option.
 
-### Charsets, Layers, and User Defined Functions
+### Daffodil Plugins
+
+#### Projects that Build Plugins
 
 If your schema project builds a Daffodil charset, layer, or user defined
-function, then set the `daffodilBuildsCharset`, `daffodilBuildsLayer`, or
-`daffodilBuildsUDF` setting to true, respectively. For example:
+function plugin, then set the `daffodilBuildsCharset`, `daffodilBuildsLayer`,
+or `daffodilBuildsUDF` setting to true, respectively. For example:
 
 ```scala
 daffodilBuildsCharset := true
@@ -263,16 +247,32 @@ daffodilBuildsUDF := true
 Setting any of these values to true adds additional dependencies needed to
 build the component.
 
-Note that this also sets the SBT `crossPaths` setting to `true`, which causes
-the Scala version to be included in the jar file name, since charsets, layers,
-and UDF jars may be implemented in Scala and are specific to the Scala version
-used to build them. However, if your schema project implements
-charsets/layers/UDFs using only Java, you can override this in build.sbt and
-remove the Scala version from the jar name, for example:
+The classifer of plugin jars is set to `daffodilXYZ`, where `XYZ` indicates the
+version of Daffodil it was compiled with. This is important since plugins might
+not be compatible with all Daffodil versions due to Scala or Daffodil API
+differences.
+
+See [Cross-Building](#cross-building) to build plugins in support of multiple
+versions of Daffodil.
+
+#### Projects that Use Plugins
+
+Projects that use Daffodil charset, layer, or user defined function plugin
+should specify the dependency using the `daffodilPluginDependencies` setting.
+Note that the `daffodilXYZ` classifier should not be included and `%%` should
+not be used even if the plugin is written in Scala. For example:
 
 ```scala
-crossPaths := false
+daffodilPluginDependencies := Seq(
+  "org.example" % "daffodil-layer-plugin" % "1.0.0"
+)
 ```
+
+The appropriate `daffodilXYZ` classifier will be added to the dependency based
+on the `daffodilVersion` of the project. The plugin dependency will also be
+added in the `"provided"` scope--this avoids potential issues with transitive
+dependencies, but does mean that if a schema project depends on a plugin, even
+transitively, it must specify it in `daffodilPluginDependencies`.
 
 ### Flat Directory Layout
 
@@ -290,11 +290,103 @@ root `src/` directory, and all test source and resource files to be in a root
 `test/` directory. Source files are those that end with `*.scala` or `*.java`,
 and resource files are anything else.
 
-## Testing
+### Cross-Building
+
+In some cases it is helpful to have a single SBT project that supports the
+ability to build/test/generate saved parsers/etc. for multiple versions of
+Daffodil. To do so, define a project as normal and call `.daffodilProject()`
+passing in a `Seq` of additional daffodil versions to support. For example:
+
+```scala
+val format = project in file(".")
+  .settings(
+    ...
+    daffodilVersion := "3.10.0"
+  )
+  .daffodilProject(crossDaffodilVersions = Seq("3.11.0", "4.0.0"))
+```
+
+Note that the `daffodilVersion` in the root project should not be listed in the
+`crossDaffodilVersions` sequence.
+
+For each Daffodil version defined in `crossDaffodilVersions`, a subproject is
+created that is a copy of the root project but with `_daffodilXYZ` appended to
+the project ID. For example, the example above creates three projects:
+`format`, `format_daffodil3110`, `and format_daffodil400`. Each of these
+projects has the DaffodilPlugin enabled and is configured to
+build/test/publish/etc. with their respective daffodil versions. Additional
+changes made to the projects described below.
+
+#### Source Files
+
+The root project and subprojects share the same `src/` and `lib/` directories.
+Additionally, source files specific to a particular version of Daffodil can be
+placed in `src/{main,test}/{scala,java}-daffodil-<daffodilVersion>`. This is
+useful in cases where plugins or tests require different code for different
+Daffodil versions, usually due to Scala or Daffodil API changes.
+
+#### Build Artifacts
+
+Build artifacts (e.g. compiled plugin classes, saved parsers) are stored in the
+`target/daffodilXYZ` directory. For example, saved parsrs might be these
+locations:
+
+```
+target/format-1.0-daffodil3100.bin
+target/daffodil3110/format-1.0-file-daffodil3110.bin
+target/daffodil400/format-1.0-file-daffodil400.bin
+```
+
+#### Publishing
+
+Publishing from subprojects is disabled. Instead, all subproject artifacts
+(e.g. compiled plugins, saved parsers, javadocs, sources) are published as
+artifacts to the root project, using classifiers for differentiation.
+
+#### Aggregation
+
+The root project does aggregate the subprojects, but sets the `aggregate`
+setting to `false`. This means that sbt tasks are only evaluated on the root
+project by default.
+
+To run tasks on a subproject you can explicitly specify the project:
+
+```bash
+# run tests for only Daffodil 4.0.0
+sbt format_daffodil400/test
+```
+
+Or change the `aggregate` setting to `true` before running the task. Note that
+aggregated tasks run in parallel. With many cross versions, this can require
+very large amounts of memory--it may be useful to disable parallel execution
+for the more resource intensive tasks like packageDaffodilBin or tests:
+
+```bash
+# run tests for root and all subprojects, disabling parallel execution of tests
+# and creating saved parsers
+sbt "set aggregate:= true" \
+    "set packageDaffodilBin / parallelExecution := false" \
+    "set test / parallelExecution := false" \
+    "test"
+```
+
+#### Different Subproject Settings
+
+In rare cases it could be necessary to change a subproject setting to something
+different than that of the root project. This can be done by getting a
+reference to the subproject by calling `.daffodil(<version>)` on the root
+project and modifying the settings as usual. For example, to disable publishing
+of only the "4.0.0" saved parser:
+
+```scala
+format.daffodil("4.0.0") / packageDaffodilBin / publishArtifact := false
+```
+
+## Plugin Testing
 
 This plugin use the [scripted test framework] for testing. Each directory in
 `src/sbt-test/sbt-daffodil/` is a small SBT project the uses this plugin, and
-defines a `test.script` file that lists sbt commandss and file system checks to
+defines a `test.script` file that lists sbt commands and file system checks to
 run.
 
 To run all tests, run either of these commands:

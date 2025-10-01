@@ -15,20 +15,15 @@
  * limitations under the License.
  */
 
-version := "0.1"
-
-name := "test"
-
-organization := "com.example"
-
-enablePlugins(DaffodilPlugin)
-
-packageDaffodilBin / javaOptions ++= Seq("-XshouldErrorIfUsed")
-
-daffodilPackageBinInfos := Seq(
-  DaffodilBinInfo("/test.dfdl.xsd")
-)
-
-daffodilPackageBinVersions := Seq("3.6.0")
-
-daffodilVersion := daffodilPackageBinVersions.value.head
+val test = (project in file("."))
+  .settings(
+    version := "0.1",
+    name := "test",
+    organization := "com.example",
+    packageDaffodilBin / javaOptions ++= Seq("-XshouldErrorIfUsed"),
+    daffodilPackageBinInfos := Seq(
+      DaffodilBinInfo("/test.dfdl.xsd")
+    ),
+    daffodilVersion := "3.6.0",
+  )
+  .daffodilProject()
