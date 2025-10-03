@@ -25,7 +25,7 @@ val plugin = (project in file("plugin"))
     daffodilVersion := "3.10.0",
     daffodilBuildsCharset := true,
   )
-  .daffodilProject(crossDaffodilVersions = Seq("3.11.0"))
+  .daffodilProject(crossDaffodilVersions = Seq("3.1.0", "3.11.0"))
 
 val schema = (project in file("schema"))
   .settings(

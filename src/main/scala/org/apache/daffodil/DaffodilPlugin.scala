@@ -360,6 +360,52 @@ object DaffodilPlugin extends AutoPlugin {
     },
 
     /**
+     * If we are building plugins, we want to make sure they are built with compatability for
+     * the minimum version of Java that daffodilVersion supports, regardless of the javac
+     * version used for compilation. For example, even when building on Java 17+, we want to
+     * make sure plugins that are built for Daffodil 3.10.0 are built with Java 8 compatability.
+     * We use daffodilVerison to determine the target JDK version, and the current javac version
+     * to figure out the right javacOptions to set.
+     */
+    javacOptions ++= {
+      if (daffodilBuildsPlugin.value) {
+        val daffodilPluginJdkCompatMap = Map(
+          ">=4.0.0 " -> "17",
+          "<=3.11.0" -> "8"
+        )
+        val jdkCompat = filterVersions(daffodilVersion.value, daffodilPluginJdkCompatMap).head
+        val javacOptionsMap = Map(
+          ">=9" -> Seq("--release", jdkCompat),
+          " =8" -> Seq("-source", jdkCompat, "-target", jdkCompat)
+        )
+        filterVersions(Properties.javaSpecVersion, javacOptionsMap).head
+      } else {
+        Seq()
+      }
+    },
+
+    /**
+     * See javacOptions above for details
+     */
+    scalacOptions ++= {
+      if (daffodilBuildsPlugin.value) {
+        val daffodilPluginJdkCompatMap = Map(
+          ">=4.0.0 " -> "17",
+          "<=3.11.0" -> "8"
+        )
+        val jdkCompat = filterVersions(daffodilVersion.value, daffodilPluginJdkCompatMap).head
+        val scalacOptionsMap = Map(
+          ">=2.13         " -> Seq("--release", jdkCompat),
+          ">=2.12.16 <2.13" -> Seq(s"--target:jvm-$jdkCompat"),
+          "<=2.12.15      " -> Seq(s"-target:jvm-1.$jdkCompat")
+        )
+        filterVersions(scalaVersion.value, scalacOptionsMap).head
+      } else {
+        Seq()
+      }
+    },
+
+    /**
      * DFDL schemas are not scala version specific since they just contain resources, so we
      * disable crossPaths so that published jars do not contain a scala version. However, if a
      * project builds any plugins (i.e. charset, layers, UDFs) then we do need to enable
