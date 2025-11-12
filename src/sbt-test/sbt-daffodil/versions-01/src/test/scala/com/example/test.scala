@@ -17,19 +17,17 @@
 
 package com.example
 
-import org.apache.daffodil.tdml.Runner
+import org.apache.daffodil.junit.tdml.TdmlSuite
+import org.apache.daffodil.junit.tdml.TdmlTests
 
-import org.junit.AfterClass
 import org.junit.Test
 
-object TestExample {
-  lazy val runner = Runner("/com/example/", "test.tdml")
-
-  @AfterClass def shutdown: Unit = { runner.reset }
+object TestExample extends TdmlSuite {
+  val tdmlResource = "/com/example/test.tdml"
 }
 
-class TestExample {
-  import TestExample._
+class TestExample extends TdmlTests {
+  val tdmlSuite = TestExample
 
-  @Test def test_test01() { runner.runOneTest("test01") }
+  @Test def test01 = test
 }
