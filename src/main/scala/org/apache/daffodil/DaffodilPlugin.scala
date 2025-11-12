@@ -101,6 +101,8 @@ object DaffodilPlugin extends AutoPlugin {
     }
   }
 
+  val sbtDaffodilPluginVersion = this.getClass.getPackage.getImplementationVersion()
+
   /**
    * With the way SemanticVersion works by default it treats SNAPSHOT versions
    * as less than non-SNAPSHOT versions, ie 4.0.0-SNAPSHOT < 4.0.0.  That makes
@@ -450,9 +452,18 @@ object DaffodilPlugin extends AutoPlugin {
         // the Daffodil dependency must ignore the scalaVersion setting and instead use
         // the specific version of scala used for the binDaffodilVersion.
         val daffodilToPackageBinDep = Map(
-          ">=4.0.0 " -> "org.apache.daffodil" % "daffodil-core_3" % binDaffodilVersion % cfg,
-          "=3.11.0 " -> "org.apache.daffodil" % "daffodil-japi_2.13" % binDaffodilVersion % cfg,
-          "<=3.10.0 " -> "org.apache.daffodil" % "daffodil-japi_2.12" % binDaffodilVersion % cfg
+          ">=4.0.0 " -> Seq(
+            "org.apache.daffodil" % "daffodil-core_3" % binDaffodilVersion % cfg,
+            "org.apache.daffodil" % "sbt-daffodil-utils_3" % sbtDaffodilPluginVersion % cfg
+          ),
+          "=3.11.0 " -> Seq(
+            "org.apache.daffodil" % "daffodil-japi_2.13" % binDaffodilVersion % cfg,
+            "org.apache.daffodil" % "sbt-daffodil-utils_2.13" % sbtDaffodilPluginVersion % cfg
+          ),
+          "<=3.10.0" -> Seq(
+            "org.apache.daffodil" % "daffodil-japi_2.12" % binDaffodilVersion % cfg,
+            "org.apache.daffodil" % "sbt-daffodil-utils_2.12" % sbtDaffodilPluginVersion % cfg
+          )
         )
         val dafDep = filterVersions(binDaffodilVersion, daffodilToPackageBinDep).head
         // Add logging backends used when packageDaffodilBin outputs log messages
@@ -461,7 +472,7 @@ object DaffodilPlugin extends AutoPlugin {
           "<3.5.0" -> "org.apache.logging.log4j" % "log4j-core" % "2.20.0" % cfg
         )
         val logDep = filterVersions(binDaffodilVersion, daffodilToLogDependency).head
-        Seq(dafDep, logDep)
+        dafDep :+ logDep
       }.toSeq
     },
 
@@ -493,15 +504,10 @@ object DaffodilPlugin extends AutoPlugin {
       // options to provide to the forked JVM process used to save a processor
       val jvmArgs = (packageDaffodilBin / javaOptions).value
 
-      // this plugin jar includes a forkable main class that does the actual schema compilation
-      // and saving.
-      val pluginJar =
-        new File(this.getClass.getProtectionDomain.getCodeSource.getLocation.toURI)
-
       // get all dependencies and resources of this project
       val projectClasspath = (Compile / fullClasspath).value.files
 
-      val mainClass = classOf[DaffodilSaver].getCanonicalName
+      val mainClass = "org.apache.daffodil.DaffodilSaver"
 
       // schema compilation can be expensive, so we only want to fork and compile the schema if
       // any of the project classpath files change
@@ -539,8 +545,10 @@ object DaffodilPlugin extends AutoPlugin {
           // Note that order matters here. The projectClasspath might have daffodil jars on it if
           // Daffodil is a compile dependency, which could be a different version from the version
           // of Daffodil we are compiling the schema for. So when we fork Java, daffodilJars must be
-          // on the classpath before projectClasspath jars
-          val classpathFiles = Seq(pluginJar) ++ daffodilJars ++ projectClasspath
+          // on the classpath before projectClasspath jars. Also note that daffodilJars
+          // includes both the Daffodil jars and the sbt-daffodil-utils jar that contains the
+          // DaffodilSaver we are going to fork
+          val classpathFiles = daffodilJars ++ projectClasspath
 
           daffodilPackageBinInfos.value.map { dbi =>
             val classifier = classifierName(dbi.name, daffodilVersion)
@@ -559,11 +567,13 @@ object DaffodilPlugin extends AutoPlugin {
             // SBT libraries on the classpath, so it can't easily use the SemanticVersion to
             // compare versions. So we map each Daffodil version to an "internal API" version,
             // which is just a simple number that is easier to use in the Saver and signify
-            // where API functions to use. This is the mapping for which Daffodil API should be
-            // used for a particular "internal API"
+            // which API functions to use. This is the mapping for which Daffodil API should be
+            // used for a particular "internal API". Note that the DaffodilSaver uses
+            // sbt-projectmagic to handle changes to Daffodil package namespaces, so this
+            // doesn't need different numbers for those. It's only really needed when we want to
+            // use new API functions that aren't available with older verisons of Daffodil.
             val daffodilInternalApiVersionMapping = Map(
-              ">=4.0.0" -> "3",
-              ">=3.9.0 <=3.11.0" -> "2",
+              ">=3.9.0" -> "2",
               "<=3.8.0" -> "1"
             )
             val internalApiVersion =
