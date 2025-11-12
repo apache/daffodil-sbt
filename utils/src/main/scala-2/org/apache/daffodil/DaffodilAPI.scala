@@ -15,8 +15,14 @@
  * limitations under the License.
  */
 
-addSbtPlugin("org.musigma" % "sbt-rat" % "0.7.0")
+package org.apache.daffodil
 
-addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.4")
+/**
+ * Defines type aliases and helper functions used by our plugin utilties to provide
+ * compatability with Scala 2.x and Daffodil 3.x
+ */
+object DaffodilAPI {
+  type Diagnostic = org.apache.daffodil.japi.Diagnostic
 
-addSbtPlugin("com.eed3si9n" % "sbt-projectmatrix" % "0.11.0")
+  def compiler() = org.apache.daffodil.japi.Daffodil.compiler()
+}
