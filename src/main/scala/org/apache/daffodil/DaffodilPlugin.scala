@@ -172,8 +172,8 @@ object DaffodilPlugin extends AutoPlugin {
       // minmum Scala version compatabiilty for each JDK version and major scala version, from
       // https://docs.scala-lang.org/overviews/jdk-compatibility/overview.html
       val jdkToMinScala212Version = Map(
-        ">=25     " -> "2.12.21",
-        "=24      " -> "2.12.21",
+        ">=25     " -> "2.12.20",
+        "=24      " -> "2.12.20",
         "=23      " -> "2.12.20",
         "=22      " -> "2.12.19",
         "=21      " -> "2.12.18",
