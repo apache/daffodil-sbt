@@ -126,4 +126,4 @@ lazy val utils = (projectMatrix in file("utils"))
       }
     }
   )
-  .jvmPlatform(scalaVersions = Seq("2.12.20", "2.13.16", "3.3.6"))
+  .jvmPlatform(scalaVersions = Seq("2.12.20", "2.13.18", "3.3.6"))
