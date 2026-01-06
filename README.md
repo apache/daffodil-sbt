@@ -228,6 +228,36 @@ IntelliJ, do not trigger during builds. So you must either run `sbt Test/compile
 to manually trigger the resource generator, or let SBT handle builds by
 enabling the "Use SBT shell for builds" option.
 
+### Saved Parsers as Dependencies
+
+It can sometimes be useful to add a saved parser as a dependency, causing SBT
+to download a saved parser published to a repository. This plugin enriches
+`ModuleID` with the `daffodilBin(...)` function to simplify this. The function
+requires a version to specify Daffodil compatibility of the saved parser--it
+should usually be `daffodilVersion.value`. For example:
+
+```scala
+libraryDependencies ++= Seq(
+  "org.example" % "dfdl-fmt" % "1.0.0" daffodilBin(daffodilVersion.value)
+)
+```
+
+This example adds a dependency to a saved parser for dfdl-fmt compatible with
+`daffodilVersion`.
+
+Note that because saved parsers are not jars, SBT will only download the saved
+parser--it will not do anything else like add it to the classpath. It is left
+to users to find and reference the file if needed. As an example, directories
+containing saved parsers could be added to the `test` classpath like this:
+
+```scala
+Test / dependencyClasspath ++= {
+    val savedParsers = update.value.matching(artifactFilter(`type` = "parser"))
+    val savedParserDirs = savedParser.map(_.toParentFile)
+    savedParserDirs
+}
+```
+
 ### Daffodil Plugins
 
 #### Projects that Build Plugins
@@ -257,22 +287,25 @@ versions of Daffodil.
 
 #### Projects that Use Plugins
 
-Projects that use Daffodil charset, layer, or user defined function plugin
-should specify the dependency using the `daffodilPluginDependencies` setting.
-Note that the `daffodilXYZ` classifier should not be included and `%%` should
-not be used even if the plugin is written in Scala. For example:
+Projects that use a Daffodil charset, layer, or user defined function plugin
+should add the plugin to the `libraryDependencies` setting with the
+`daffodilPlugin(...)` enrichment to `ModuleID`. The function requires a version
+to specify Daffodil compatibility of the plugin--it should usually be
+`daffodilVersion.value`. For example:
 
 ```scala
-daffodilPluginDependencies := Seq(
-  "org.example" % "daffodil-layer-plugin" % "1.0.0"
+libraryDependencies ++= Seq(
+  "org.example" % "daffodil-layer-plugin" % "1.0.0" daffodilPlugin(daffodilVersion.value)
 )
 ```
 
+Note that `%%` should not be used even if the plugin is written in Scala.
+
 The appropriate `daffodilXYZ` classifier will be added to the dependency based
-on the `daffodilVersion` of the project. The plugin dependency will also be
-added in the `"provided"` scope--this avoids potential issues with transitive
-dependencies, but does mean that if a schema project depends on a plugin, even
-transitively, it must specify it in `daffodilPluginDependencies`.
+on the provided version. The plugin dependency will also be added in the
+`"provided"` scope--this avoids potential issues with transitive dependencies,
+but does mean that if a schema project depends on a plugin, even transitively,
+it must specify the `libraryDependencies` entry.
 
 ### Flat Directory Layout
 

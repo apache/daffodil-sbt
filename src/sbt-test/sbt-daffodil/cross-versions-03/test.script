@@ -29,5 +29,23 @@
 # test only 3.11.0 with the plugin
 > schema_daffodil3110/test
 
-# test only 4.0.0 with the plugin, this fails because the plugin was not build for 4.0.0
--> schema_daffodil400/test
+# test only 4.0.0 with the plugin
+> schema_daffodil400/test
+
+# publish the schema and all versions of saved parsers
+> schema/publish
+
+# run bundle resource generators, which should copy the plugin and saved
+# parsers to a "release" directory
+> bundle/package
+> bundle_daffodil3110/package
+> bundle_daffodil400/package
+
+$ exists bundle/target/release/test-plugin-0.1-daffodil400.jar
+$ exists bundle/target/release/test-schema-0.1-daffodil400.bin
+
+$ exists bundle/target/release/test-plugin-0.1-daffodil3100.jar
+$ exists bundle/target/release/test-schema-0.1-daffodil3100.bin
+
+$ exists bundle/target/release/test-plugin-0.1-daffodil3110.jar
+$ exists bundle/target/release/test-schema-0.1-daffodil3110.bin
