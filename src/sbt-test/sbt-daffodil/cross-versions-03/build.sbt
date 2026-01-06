@@ -25,7 +25,7 @@ val plugin = (project in file("plugin"))
     daffodilVersion := "3.10.0",
     daffodilBuildsCharset := true,
   )
-  .daffodilProject(crossDaffodilVersions = Seq("3.1.0", "3.11.0"))
+  .daffodilProject(crossDaffodilVersions = Seq("3.11.0", "4.0.0"))
 
 val schema = (project in file("schema"))
   .settings(
@@ -33,8 +33,34 @@ val schema = (project in file("schema"))
     version := "0.1",
     organization := "com.example",
     daffodilVersion := "3.10.0",
-    daffodilPluginDependencies := Seq(
-      "com.example" % "test-plugin" % "0.1"
+    libraryDependencies ++= Seq(
+      "com.example" % "test-plugin" % "0.1" daffodilPlugin(daffodilVersion.value)
     ),
+    daffodilPackageBinInfos := Seq(
+      DaffodilBinInfo("/com/example/test.dfdl.xsd")
+    )
   )
   .daffodilProject(crossDaffodilVersions = Seq("3.11.0", "4.0.0"))
+
+val bundle = (project in file("bundle"))
+  .settings(
+    name := "test-bundle",
+    version := "0.1",
+    organization := "com.example",
+    daffodilVersion := "3.10.0",
+    libraryDependencies ++= Seq(
+      "com.example" % "test-plugin" % "0.1" daffodilPlugin(daffodilVersion.value),
+      "com.example" % "test-schema" % "0.1" daffodilBin(daffodilVersion.value)
+    ),
+    Compile / resourceGenerators += Def.task {
+      // copy plugins and saved parsers to a "release" directory
+      val srcFiles = update.value.matching(moduleFilter("com.example"))
+      val destDir = (Compile / baseDirectory).value / "target" / "release"
+      val destFiles = srcFiles.map { src =>
+        val dest = destDir / src.getName()
+        IO.copyFile(src, dest)
+        dest
+      }
+      destFiles
+    }.taskValue
+  ).daffodilProject(crossDaffodilVersions = Seq("3.11.0", "4.0.0"))

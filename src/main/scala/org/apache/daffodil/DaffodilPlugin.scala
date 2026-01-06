@@ -63,9 +63,6 @@ object DaffodilPlugin extends AutoPlugin {
     val daffodilTdmlUsesPackageBin = settingKey[Boolean](
       "Whether or not TDML files use the saved parsers created by daffodilPackageBin"
     )
-    val daffodilPluginDependencies = settingKey[Seq[ModuleID]](
-      "Dependendies to Daffodil plugins. This should not include the Daffodil version suffix"
-    )
 
     /**
      * Class to define daffodilPackageBinInfos, auto-imported to simplify sbt configs
@@ -99,6 +96,59 @@ object DaffodilPlugin extends AutoPlugin {
         DaffodilProject(root, crossDaffodilVersions)
       }
     }
+
+    /**
+     * Provides enrichments to ModuleID to provide daffodil specific capabilities
+     */
+    implicit class DaffodilModuleIDOps(private val moduleId: ModuleID) extends AnyVal {
+
+      /**
+       * Specify that a ModuleID is to a saved parser compatible with a specific version of
+       * Daffodil. For example:
+       *
+       *   libraryDependences ++= Seq(
+       *     "org.example" % "dfdl-fmt" % "1.0.0" daffodilBin(daffodilVersion.value)
+       *   )
+       *
+       * This adds the dfdl-fmt-1.0.0-daffodilXYZ.bin saved parser as a dependency. Note that
+       * SBT will not add this to the classpath like normal dependencies (because it's not a
+       * jar), but the path can be extracted from the SBT "update" task. This also adds it to
+       * the "provided" scope so that other schema projects can depend on this schema project
+       * with a potentially different version of Daffodil and saved parser. This does mean that
+       * if schema project A depends on saved parser from Foo, and schema project B depends on
+       * project A, then project B must also list Foo as a dependency with daffodilBin(...) if
+       * it needs the saved parser.
+       */
+      def daffodilBin(daffodilVersion: String): ModuleID = {
+        moduleId
+          .artifacts(
+            Artifact(moduleId.name, "parser", "bin", daffodilVersionId(daffodilVersion))
+          )
+          .withConfigurations(Some("provided"))
+      }
+
+      /**
+       * Specify that a ModuleID is to a plugin compatible with a specific version of Daffodil.
+       * For example:
+       *
+       *   libraryDependences ++= Seq(
+       *     "org.example" % "dfdl-plugin" % "1.0.0" daffodilPlugin(daffodilVersion.value)
+       *   )
+       *
+       * This adds the dfdl-plugin-1.0.0-daffodilXYZ.jar as a dependency and adds it to the
+       * classpath. This also adds it to the "provided" scope so that other schema projects can
+       * depend on this schema project with a potentially different version of Daffodil and
+       * plugin. This does mean that if schema project A depends on plugin Foo, and schema
+       * project B depends on project A, then project B must also list Foo as a dependency with
+       * daffodilPlugin(...).
+       */
+      def daffodilPlugin(daffodilVersion: String): ModuleID = {
+        moduleId
+          .artifacts(Artifact(moduleId.name, daffodilVersionId(daffodilVersion)))
+          .withConfigurations(Some("provided"))
+      }
+    }
+
   }
 
   val sbtDaffodilPluginVersion = this.getClass.getPackage.getImplementationVersion()
@@ -345,23 +395,6 @@ object DaffodilPlugin extends AutoPlugin {
     },
 
     /**
-     * Modify libraryDependencies to add dependencies to Daffodil plugins this project has. The
-     * plugin dependencies are modified to use a version compatible with daffodilVersion by
-     * specifying the appropriate classifer based on the daffodil version. It also adds plugin
-     * dependencies to the "provided" scope so that other schema projects can depend on this
-     * schema project with a potentially different version of Daffodil and the plugins. This
-     * does mean that if schema project A depends on plugin Foo, and schema project B depends on
-     * project A, then project B must also list Foo as a daffodilPluginDependency.
-     */
-    libraryDependencies ++= {
-      daffodilPluginDependencies.value.map { pluginModuleID =>
-        pluginModuleID
-          .classifier(daffodilVersionId(daffodilVersion.value))
-          .withConfigurations(Some("provided"))
-      }
-    },
-
-    /**
      * If we are building plugins, we want to make sure they are built with compatability for
      * the minimum version of Java that daffodilVersion supports, regardless of the javac
      * version used for compilation. For example, even when building on Java 17+, we want to
@@ -432,11 +465,6 @@ object DaffodilPlugin extends AutoPlugin {
      */
     daffodilPackageBinInfos := Seq(),
     daffodilPackageBinVersions := Seq(),
-
-    /**
-     * Default to no Daffodil plugins
-     */
-    daffodilPluginDependencies := Seq(),
 
     /**
      * define and configure a custom Ivy configuration with dependencies to the Daffodil
