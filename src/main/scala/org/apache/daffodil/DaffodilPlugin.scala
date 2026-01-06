@@ -205,91 +205,25 @@ object DaffodilPlugin extends AutoPlugin {
 
   override lazy val projectSettings: Seq[Setting[_]] = Seq(
     /**
-     * Even though Daffodil defines a transitive dependency to a specific version of Scala, once
-     * SBT sees that dependency it replaces it with a dependency to the value of the
-     * scalaVersion setting, ignoring whatever version Daffodil depends on. Settings like
-     * autoScalaLibrary and managedScalaInstance do not seem to change this behavior. So we
-     * maintain a mapping of scalaVersions used for each Daffodil release and set the
-     * scalaVersion setting based on the daffodilVersion setting. As long as schema projects do
-     * not override this setting, it ensures they use the same Scala version that Daffodil was
-     * released with. Schema projects can override this setting if they really need a specific
-     * Scala version, but that should be rare. We also take into account the minimum scala
-     * version supported by the current JDK, and will override with a newer version of scala if
-     * required by the JDK.
+     * Different versions of Daffodil depend on a specific major/minor version of Scala. For
+     * example, all versions of Daffodil 3.10.0 and older depend on Scala 2.12.x. Note that
+     * Scala ensures binary compatibility, so we can use the latest patch version for any
+     * version of Daffodil, as long as we use the correct major/minor version. These Scala
+     * versions should be updated anytime a new patch release is made available to ensure we
+     * have the latest bug fixes and JDK compatibility. Note that this does mean that we could
+     * use a Scala version that a version of Daffodil was not released or tested with, but Scala
+     * backwards compatibility guarantees should prevent this from causing issues.
      */
     scalaVersion := {
-
-      // minmum Scala version compatabiilty for each JDK version and major scala version, from
-      // https://docs.scala-lang.org/overviews/jdk-compatibility/overview.html
-      val jdkToMinScala212Version = Map(
-        ">=25     " -> "2.12.21",
-        "=24      " -> "2.12.21",
-        "=23      " -> "2.12.20",
-        "=22      " -> "2.12.19",
-        "=21      " -> "2.12.18",
-        ">=17 <=20" -> "2.12.15",
-        ">=11 <=16" -> "2.12.4",
-        "     <=10" -> "2.12.0"
-      )
-      val jdkToMinScala213Version = Map(
-        ">=25     " -> "2.13.17",
-        "=24      " -> "2.13.16",
-        "=23      " -> "2.13.15",
-        "=22      " -> "2.13.13",
-        "=21      " -> "2.13.11",
-        ">=17 <=20" -> "2.13.6",
-        ">=11 <=16" -> "2.13.4",
-        "     <=10" -> "2.13.0"
-      )
-      val jdkToMinScala3Version = Map(
-        ">=25     " -> "3.3.6",
-        "=24      " -> "3.3.6",
-        "=23      " -> "3.3.5",
-        "=22      " -> "3.3.4",
-        "=21      " -> "3.3.1",
-        ">=17 <=20" -> "3.3.0",
-        ">=11 <=16" -> "3.3.0",
-        "     <=10" -> "3.3.0"
-      )
-
-      // which of the above maps to use based on the Daffodil version, since different Daffodil
-      // versions require different major scala versions
-      val daffodilToJdkMinScalaVersionMap = Map(
-        ">=4.0.0 " -> jdkToMinScala3Version,
-        "=3.11.0 " -> jdkToMinScala213Version,
-        "<=3.10.0" -> jdkToMinScala212Version
-      )
-
-      // versions of scala each version of Daffodil was released with
+      // We really only need Scala versions and not full ModuleIds, but using ModuleId.revision
+      // makes it easier for scala-steward to detect and automatically update the versions when
+      // new Scala patch versions are released.
       val daffodilToScalaVersion = Map(
-        ">=4.0.0" -> "3.3.6",
-        "=3.11.0" -> "2.13.16",
-        "=3.10.0" -> "2.12.20",
-        "=3.9.0 " -> "2.12.20",
-        "=3.8.0 " -> "2.12.19",
-        "=3.7.0 " -> "2.12.19",
-        "=3.6.0 " -> "2.12.18",
-        "=3.5.0 " -> "2.12.18",
-        "=3.4.0 " -> "2.12.17",
-        "=3.3.0 " -> "2.12.15",
-        "=3.2.0 " -> "2.12.15",
-        "=3.1.0 " -> "2.12.13",
-        "<3.1.0 " -> "2.12.11"
+        ">=4.0.0 " -> ("org.scala-lang" % "scala3-library" % "3.3.7").revision,
+        "=3.11.0 " -> ("org.scala-lang" % "scala-library" % "2.13.18").revision,
+        "<=3.10.0" -> ("org.scala-lang" % "scala-library" % "2.12.21").revision
       )
-
-      val dafScalaVersion =
-        filterVersions(daffodilVersion.value, daffodilToScalaVersion).head
-
-      val jdkToMinScalaVersionMap =
-        filterVersions(daffodilVersion.value, daffodilToJdkMinScalaVersionMap).head
-      val jdkMinScalaVersion =
-        filterVersions(Properties.javaSpecVersion, jdkToMinScalaVersionMap).head
-
-      if (SemanticSelector("<" + jdkMinScalaVersion).matches(dafScalaVersion)) {
-        jdkMinScalaVersion
-      } else {
-        dafScalaVersion
-      }
+      filterVersions(daffodilVersion.value, daffodilToScalaVersion).head
     },
 
     /**
