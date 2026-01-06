@@ -105,17 +105,13 @@ lazy val utils = (projectMatrix in file("utils"))
       scalaBinaryVersion.value match {
         case "2.12" => {
           Seq(
-            // scala-steward:off
-            "org.apache.daffodil" %% "daffodil-japi" % "3.10.0" % "provided",
-            // scala-steward:on
+            "org.apache.daffodil" %% "daffodil-japi" % "3.10.0" % "provided", // scala-steward:off
             "org.scala-lang.modules" %% "scala-collection-compat" % "2.14.0"
           )
         }
         case "2.13" => {
           Seq(
-            // scala-steward:off
-            "org.apache.daffodil" %% "daffodil-japi" % "3.11.0" % "provided"
-            // scala-steward:on
+            "org.apache.daffodil" %% "daffodil-japi" % "3.11.0" % "provided" // scala-steward:off
           )
         }
         case "3" => {
@@ -126,4 +122,13 @@ lazy val utils = (projectMatrix in file("utils"))
       }
     }
   )
-  .jvmPlatform(scalaVersions = Seq("2.12.20", "2.13.16", "3.3.6"))
+  .jvmPlatform(
+    // We really only need Scala versions and not full ModuleIds, but using ModuleId.revision
+    // makes it easier for scala-steward to detect and automatically update the versions when
+    // new Scala patch versions are released.
+    scalaVersions = Seq(
+      ("org.scala-lang" % "scala-library" % "2.12.21").revision,
+      ("org.scala-lang" % "scala-library" % "2.13.18").revision,
+      ("org.scala-lang" % "scala3-library" % "3.3.7").revision
+    )
+  )
