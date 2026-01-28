@@ -238,7 +238,7 @@ should usually be `daffodilVersion.value`. For example:
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.example" % "dfdl-fmt" % "1.0.0" daffodilBin(daffodilVersion.value)
+  ("org.example" % "dfdl-fmt" % "1.0.0").daffodilBin(daffodilVersion.value)
 )
 ```
 
@@ -295,7 +295,7 @@ to specify Daffodil compatibility of the plugin--it should usually be
 
 ```scala
 libraryDependencies ++= Seq(
-  "org.example" % "daffodil-layer-plugin" % "1.0.0" daffodilPlugin(daffodilVersion.value)
+  ("org.example" % "daffodil-layer-plugin" % "1.0.0").daffodilPlugin(daffodilVersion.value)
 )
 ```
 

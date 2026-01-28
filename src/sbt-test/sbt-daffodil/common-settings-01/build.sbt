@@ -20,6 +20,6 @@ val test = (project in file("."))
     version := "0.1",
     name := "test",
     organization := "com.example",
-    daffodilVersion := "3.6.0",
+    daffodilVersion := "3.6.0"
   )
   .daffodilProject()

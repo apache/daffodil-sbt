@@ -18,5 +18,5 @@
 // Not an actual layer. This is only used to show plugins can be published and resolved
 
 class Test {
-  val xs = Seq(1,2,3)
+  val xs = Seq(1, 2, 3)
 }

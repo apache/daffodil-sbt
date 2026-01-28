@@ -19,6 +19,6 @@ val test = (project in file("."))
   .settings(
     version := "0.1",
     name := "test",
-    organization := "com.example",
+    organization := "com.example"
   )
   .daffodilProject()

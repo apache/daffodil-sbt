@@ -20,5 +20,5 @@
 // Daffodil/Scala.
 
 class AllScala {
-  val xs = Seq(1,2,3)
+  val xs = Seq(1, 2, 3)
 }

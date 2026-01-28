@@ -25,6 +25,6 @@ val test = (project in file("."))
       DaffodilBinInfo("/com/example/test.dfdl.xsd"),
       DaffodilBinInfo("/com/example/test.dfdl.xsd", Some("test02"), Some("two"))
     ),
-    daffodilTdmlUsesPackageBin := true,
+    daffodilTdmlUsesPackageBin := true
   )
   .daffodilProject(crossDaffodilVersions = Seq("3.5.0"))

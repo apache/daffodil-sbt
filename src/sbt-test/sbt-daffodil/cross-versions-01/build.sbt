@@ -21,6 +21,6 @@ val test = (project in file("."))
     version := "0.1",
     organization := "com.example",
     daffodilVersion := "3.10.0",
-    daffodilBuildsLayer := true,
+    daffodilBuildsLayer := true
   )
   .daffodilProject(crossDaffodilVersions = Seq("3.11.0", "4.0.0"))
