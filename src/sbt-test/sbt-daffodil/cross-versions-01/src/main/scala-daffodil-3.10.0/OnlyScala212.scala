@@ -19,5 +19,5 @@
 // files. This code should only compile on Scala 2.12 (used by Daffodil 3.10.0)
 
 object OnlyScala212 {
-  val l: TraversableOnce[Int] = List(1,2,3)
+  val l: TraversableOnce[Int] = List(1, 2, 3)
 }

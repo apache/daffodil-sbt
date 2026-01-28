@@ -27,6 +27,6 @@ val test = (project in file("."))
         DaffodilBinInfo("/test.dfdl.xsd", Some("test02"), Some("two"), config = config)
       )
     },
-    daffodilVersion := "3.11.0",
+    daffodilVersion := "3.11.0"
   )
   .daffodilProject(crossDaffodilVersions = Seq("3.5.0"))

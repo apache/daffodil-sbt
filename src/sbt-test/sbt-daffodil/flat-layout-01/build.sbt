@@ -21,6 +21,6 @@ val test = (project in file("."))
     name := "test",
     organization := "com.example",
     daffodilVersion := "3.6.0",
-    daffodilFlatLayout := true,
+    daffodilFlatLayout := true
   )
   .daffodilProject()

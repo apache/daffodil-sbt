@@ -23,7 +23,7 @@ val plugin = (project in file("plugin"))
     version := "0.1",
     organization := "com.example",
     daffodilVersion := "3.10.0",
-    daffodilBuildsCharset := true,
+    daffodilBuildsCharset := true
   )
   .daffodilProject(crossDaffodilVersions = Seq("3.11.0", "4.0.0"))
 
@@ -34,7 +34,7 @@ val schema = (project in file("schema"))
     organization := "com.example",
     daffodilVersion := "3.10.0",
     libraryDependencies ++= Seq(
-      "com.example" % "test-plugin" % "0.1" daffodilPlugin(daffodilVersion.value)
+      ("com.example" % "test-plugin" % "0.1").daffodilPlugin(daffodilVersion.value)
     ),
     daffodilPackageBinInfos := Seq(
       DaffodilBinInfo("/com/example/test.dfdl.xsd")
@@ -49,8 +49,8 @@ val bundle = (project in file("bundle"))
     organization := "com.example",
     daffodilVersion := "3.10.0",
     libraryDependencies ++= Seq(
-      "com.example" % "test-plugin" % "0.1" daffodilPlugin(daffodilVersion.value),
-      "com.example" % "test-schema" % "0.1" daffodilBin(daffodilVersion.value)
+      ("com.example" % "test-plugin" % "0.1").daffodilPlugin(daffodilVersion.value),
+      ("com.example" % "test-schema" % "0.1").daffodilBin(daffodilVersion.value)
     ),
     Compile / resourceGenerators += Def.task {
       // copy plugins and saved parsers to a "release" directory
@@ -63,4 +63,5 @@ val bundle = (project in file("bundle"))
       }
       destFiles
     }.taskValue
-  ).daffodilProject(crossDaffodilVersions = Seq("3.11.0", "4.0.0"))
+  )
+  .daffodilProject(crossDaffodilVersions = Seq("3.11.0", "4.0.0"))
