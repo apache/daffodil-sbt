@@ -116,7 +116,7 @@ lazy val utils = (projectMatrix in file("utils"))
         }
         case "3" => {
           Seq(
-            "org.apache.daffodil" %% "daffodil-core" % "4.0.0" % "provided"
+            "org.apache.daffodil" %% "daffodil-core" % "4.1.0" % "provided"
           )
         }
       }
