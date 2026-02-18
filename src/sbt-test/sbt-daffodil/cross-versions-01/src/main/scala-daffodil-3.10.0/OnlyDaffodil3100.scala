@@ -16,10 +16,8 @@
  */
 
 // Not an actual layer. This is only used to show plugins can include Daffodil version specific
-// files. This code should only compile on Scala 3 (used by Daffodil 4.0.0)
+// files. This code should only compile on Scala 2.12 (used by Daffodil 3.10.0)
 
-// enum is a new keyword in Scala 3
-enum OnlyScala3 {
-  case A, B, C
+object OnlyDaffodil3100 {
+  val l: TraversableOnce[Int] = List(1, 2, 3)
 }
-
