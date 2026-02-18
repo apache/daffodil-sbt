@@ -840,22 +840,32 @@ object DaffodilPlugin extends AutoPlugin {
         },
 
         // The above changes the name so that projects that build daffodil plugins include the
-        // cross version id in it. We no longer need crossPaths since the daffodil version
-        // provides enough differentiation, and each Daffodil version only supports a single
-        // Scala version.
-        crossPaths := false,
+        // daffodil version id in the classifier. This essentially makes the scala binary
+        // compatabiilty suffix added to jars redundant information since binary compatability
+        // is implied by the Daffodil version. So we can disable the crossVersion setting to
+        // stop SBT from adding that scala version suffix to the jar. Everything else still
+        // works as expected. Note that we also explicitly enable crossPaths, which enables
+        // directories like src/{main,test}/scala-XYZ, which can be useful for plugins and tests
+        // that need Scala or Daffodil version specific code. We also modify crossTarget to
+        // remove the scala-XYZ directory. This maintains the same directory structure as
+        // older plugin versions.
+        crossVersion := CrossVersion.disabled,
+        crossPaths := true,
+        crossTarget := crossTarget.value.getParentFile,
 
         // Add src/{main,test}/{scala,java}-daffodil-$daffodilVersion as additional source
         // directories. This directories can be used for Daffodil version specific code and is
         // only used for a single cross version project.
         Compile / unmanagedSourceDirectories ++= (Compile / unmanagedSourceDirectories).value
+          .filter { d => d.name == "scala" || d.name == "java" }
           .map { d =>
             d.getParentFile / (d.name + "-daffodil-" + daffodilVersion.value)
           },
-        Test / unmanagedSourceDirectories ++= (Test / unmanagedSourceDirectories).value.map {
-          d =>
+        Test / unmanagedSourceDirectories ++= (Test / unmanagedSourceDirectories).value
+          .filter { d => d.name == "scala" || d.name == "java" }
+          .map { d =>
             d.getParentFile / (d.name + "-daffodil-" + daffodilVersion.value)
-        },
+          },
 
         // set daffodilPackageBinVersions to the version of daffodil this project uses. Saved
         // parsers will only be created if daffodilPackageBinInfos is set

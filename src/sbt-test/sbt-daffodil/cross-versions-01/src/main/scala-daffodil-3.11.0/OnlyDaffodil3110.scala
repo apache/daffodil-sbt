@@ -16,8 +16,9 @@
  */
 
 // Not an actual layer. This is only used to show plugins can include Daffodil version specific
-// files. This code should only compile on Scala 2.12 (used by Daffodil 3.10.0)
+// files. This code should only compile on Scala 2.13 (used by Daffodil 3.11.0)
 
-object OnlyScala212 {
-  val l: TraversableOnce[Int] = List(1, 2, 3)
+object OnlyDaffodil3110 {
+  val l: LazyList[Int] = LazyList(1, 2, 3) // fails in Scala 2.12
+  val s = 'mySymbol // fails in Scala 3
 }

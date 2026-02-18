@@ -18,24 +18,29 @@
 
 > package
 $ exists target/test-plugin-0.1-daffodil3100.jar
+$ exists target/classes/OnlyDaffodil3100.class
 $ exists target/classes/OnlyScala212.class
 $ exists target/classes/AllScala.class
 
 $ absent target/daffodil3110/test-plugin-0.1-daffodil3110.jar
+$ absent target/daffodil3110/classes/OnlyDaffodil3110.class
 $ absent target/daffodil3110/classes/OnlyScala213.class
 $ absent target/daffodil3110/classes/AllScala.class
 
 $ absent target/daffodil400/test-plugin-0.1-daffodil400.jar
+$ absent target/daffodil400/classes/OnlyDaffodil400.class
 $ absent target/daffodil400/classes/OnlyScala3.class
 $ absent target/daffodil400/classes/AllScala.class
 
 > test_daffodil3110/package
 $ exists target/daffodil3110/test-plugin-0.1-daffodil3110.jar
+$ exists target/daffodil3110/classes/OnlyDaffodil3110.class
 $ exists target/daffodil3110/classes/OnlyScala213.class
 $ exists target/daffodil3110/classes/AllScala.class
 
 > test_daffodil400/package
 $ exists target/daffodil400/test-plugin-0.1-daffodil400.jar
+$ exists target/daffodil400/classes/OnlyDaffodil400.class
 $ exists target/daffodil400/classes/OnlyScala3.class
 $ exists target/daffodil400/classes/AllScala.class
 
@@ -44,13 +49,16 @@ $ exists target/daffodil400/classes/AllScala.class
 > package
 
 $ exists target/test-plugin-0.1-daffodil3100.jar
+$ exists target/classes/OnlyDaffodil3100.class
 $ exists target/classes/OnlyScala212.class
 $ exists target/classes/AllScala.class
 
 $ exists target/daffodil3110/test-plugin-0.1-daffodil3110.jar
+$ exists target/daffodil3110/classes/OnlyDaffodil3110.class
 $ exists target/daffodil3110/classes/OnlyScala213.class
 $ exists target/daffodil3110/classes/AllScala.class
 
 $ exists target/daffodil400/test-plugin-0.1-daffodil400.jar
+$ exists target/daffodil400/classes/OnlyDaffodil400.class
 $ exists target/daffodil400/classes/OnlyScala3.class
 $ exists target/daffodil400/classes/AllScala.class
