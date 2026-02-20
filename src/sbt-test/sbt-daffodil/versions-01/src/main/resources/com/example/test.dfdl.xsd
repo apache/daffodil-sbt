@@ -21,6 +21,7 @@
   xmlns:xs="http://www.w3.org/2001/XMLSchema" 
   xmlns:dfdl="http://www.ogf.org/dfdl/dfdl-1.0/"
   xmlns:ex="http://example.com"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
   targetNamespace="http://example.com"
   elementFormDefault="unqualified">
 
@@ -32,6 +33,12 @@
     </appinfo>
   </annotation>
 
-  <element name="test01" type="xs:string" dfdl:lengthKind="delimited" />
+  <element name="test01" type="xs:string" dfdl:lengthKind="delimited" dfdl:terminator="%NL;">
+    <annotation>
+      <appinfo source="http://www.ogf.org/dfdl/">
+        <dfdl:assert test="{ fn:string-length(.) gt 0 }" />
+      </appinfo>
+    </annotation>
+  </element>
 
 </schema>

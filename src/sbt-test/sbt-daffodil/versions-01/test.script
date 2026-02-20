@@ -16,74 +16,114 @@
 ## under the License.
 ## 
 
+# Note that saved parsers are created and tested with the scalaVersion set by
+# the plugin. However, the scalaVersion can sometimes be different from the
+# actual scala-library that a version of Daffodil was built and tested with.
+# This is done intentionally to provide support for newer versions of Java, and
+# in most cases does not cause issues. But it is possible it could break
+# reloading saved parsers. So, if the plugin changes how scalaVersion is set,
+# we should uncomment the exec lines below to verify that the saved parsers
+# work with actual Daffodil releases that use possibly older scala-library
+# versions. Note that these lines are commented out because they add
+# significant time to test and really only need to be run if the scalaVersion
+# setting is updated. Note that these tests passing is not a guarantee that
+# newer Scala versions do not cause issues, but the schema used is designed to
+# detect known serialization issues.
+
 > set daffodilVersion := "4.1.0"
 > packageDaffodilBin
 $ exists target/test-0.1-daffodil410.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/4.1.0/bin/apache-daffodil-4.1.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-4.1.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-4.1.0-bin/bin/daffodil parse -P target/test-0.1-daffodil410.bin src/test/resources/com/example/input.txt
 > clean
 
 > set daffodilVersion := "4.0.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil400.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/4.0.0/bin/apache-daffodil-4.0.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-4.0.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-4.0.0-bin/bin/daffodil parse -P target/test-0.1-daffodil400.bin src/test/resources/com/example/input.txt
 > clean
 
 > set daffodilVersion := "3.11.0"
 > packageDaffodilBin
 $ exists target/test-0.1-daffodil3110.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/3.11.0/bin/apache-daffodil-3.11.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-3.11.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-3.11.0-bin/bin/daffodil parse -P target/test-0.1-daffodil3110.bin src/test/resources/com/example/input.txt
 > clean
 
 > set daffodilVersion := "3.10.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil3100.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/3.10.0/bin/apache-daffodil-3.10.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-3.10.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-3.10.0-bin/bin/daffodil parse -P target/test-0.1-daffodil3100.bin src/test/resources/com/example/input.txt
 > clean
 
 > set daffodilVersion := "3.9.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil390.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/3.9.0/bin/apache-daffodil-3.9.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-3.9.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-3.9.0-bin/bin/daffodil parse -P target/test-0.1-daffodil390.bin src/test/resources/com/example/input.txt
 > clean
 
 > set daffodilVersion := "3.8.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil380.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/3.8.0/bin/apache-daffodil-3.8.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-3.8.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-3.8.0-bin/bin/daffodil parse -P target/test-0.1-daffodil380.bin src/test/resources/com/example/input.txt
 > clean
 
 > set daffodilVersion := "3.7.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil370.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/3.7.0/bin/apache-daffodil-3.7.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-3.7.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-3.7.0-bin/bin/daffodil parse -P target/test-0.1-daffodil370.bin src/test/resources/com/example/input.txt
 > clean
 
 > set daffodilVersion := "3.6.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil360.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/3.6.0/bin/apache-daffodil-3.6.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-3.6.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-3.6.0-bin/bin/daffodil parse -P target/test-0.1-daffodil360.bin src/test/resources/com/example/input.txt
 > clean
 
 > set daffodilVersion := "3.5.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil350.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/3.5.0/bin/apache-daffodil-3.5.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-3.5.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-3.5.0-bin/bin/daffodil parse -P target/test-0.1-daffodil350.bin src/test/resources/com/example/input.txt
 > clean
 
 > set daffodilVersion := "3.4.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil340.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/3.4.0/bin/apache-daffodil-3.4.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-3.4.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-3.4.0-bin/bin/daffodil parse -P target/test-0.1-daffodil340.bin src/test/resources/com/example/input.txt
 > clean
 
 > set daffodilVersion := "3.3.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil330.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/3.3.0/bin/apache-daffodil-3.3.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-3.3.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-3.3.0-bin/bin/daffodil parse -P target/test-0.1-daffodil330.bin src/test/resources/com/example/input.txt
 > clean
 
 > set daffodilVersion := "3.2.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil320.bin
 > test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/3.2.0/bin/apache-daffodil-3.2.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-3.2.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-3.2.0-bin/bin/daffodil parse -P target/test-0.1-daffodil320.bin src/test/resources/com/example/input.txt
 > clean

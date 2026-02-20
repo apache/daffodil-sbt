@@ -205,22 +205,38 @@ object DaffodilPlugin extends AutoPlugin {
 
   override lazy val projectSettings: Seq[Setting[_]] = Seq(
     /**
-     * Different versions of Daffodil depend on a specific major/minor version of Scala. For
-     * example, all versions of Daffodil 3.10.0 and older depend on Scala 2.12.x. Note that
-     * Scala ensures binary compatibility, so we can use the latest patch version for any
-     * version of Daffodil, as long as we use the correct major/minor version. These Scala
-     * versions should be updated anytime a new patch release is made available to ensure we
-     * have the latest bug fixes and JDK compatibility. Note that this does mean that we could
-     * use a Scala version that a version of Daffodil was not released or tested with, but Scala
-     * backwards compatibility guarantees should prevent this from causing issues.
+     * Each version of Daffodil is built and tested with a specific major.minor.patch version of
+     * Scala. For example, Daffodil 3.10.0 was released using Scala 2.12.20. Although Scala
+     * ensures binary compatibility with new patch releases, it does not guarantee serialization
+     * compatibility, which is needed for saved parsers (for more information, see
+     * https://github.com/scala/docs.scala-lang/issues/1202). However, we sometimes need to use
+     * newer patch versions when serializing parsers to support newer versions of Java. For
+     * example Scala 2.12.21 is required to build saved parsers on Java 25. Although
+     * serialization compatibility is not guaranteed, in practice, with Daffodils usage of Scala
+     * this seems to be safe and we are able to use the latest patch version without issue.
+     *
+     * However, the one case where this is known to break is with Daffodil 3.11.0, which uses
+     * Scala 2.13.16, and where Scala 2.13.17 breaks serialization compatibility. So for
+     * Daffodil 3.11.0, we pin the scalaVersion to 2.13.16. Note that this could mean future
+     * version of Java will not be able to create saved parsers for 3.11.0.
+     *
+     * But for all other versions of Daffodil, we can use the latest patch version and allow
+     * scala-steward to update them. This ensures we get the latest bug fixes and JDK
+     * compatibility. If a new patch release breaks serialization compatibility, we can pin it
+     * to the working version, which may limit JDK support.
      */
     scalaVersion := {
       // We really only need Scala versions and not full ModuleIds, but using ModuleId.revision
       // makes it easier for scala-steward to detect and automatically update the versions when
       // new Scala patch versions are released.
+      //
+      // Note that if we update one of the below scala-library versions, we should verify that
+      // official Daffodil releases using older versions of scala-library can still reload saved
+      // parsers built with this newer scalaVersion (see above note about serialization
+      // compatibility). See the versions-01 scripted test to how to manually verify this.
       val daffodilToScalaVersion = Map(
         ">=4.0.0 " -> ("org.scala-lang" % "scala3-library" % "3.3.7").revision,
-        "=3.11.0 " -> ("org.scala-lang" % "scala-library" % "2.13.18").revision,
+        "=3.11.0 " -> ("org.scala-lang" % "scala-library" % "2.13.16").revision, // scala-steward:off
         "<=3.10.0" -> ("org.scala-lang" % "scala-library" % "2.12.21").revision
       )
       filterVersions(daffodilVersion.value, daffodilToScalaVersion).head
@@ -411,8 +427,12 @@ object DaffodilPlugin extends AutoPlugin {
     libraryDependencies ++= {
       daffodilPackageBinVersions.value.flatMap { binDaffodilVersion =>
         val cfg = daffodilVersionId(binDaffodilVersion)
-        // the Daffodil dependency must ignore the scalaVersion setting and instead use
-        // the specific version of scala used for the binDaffodilVersion.
+        // The daffodil-core/japi dependency transitively pulls in a dependency to
+        // scala-library, while taking into account scalaVersion. Above, we are careful to set
+        // scalaVersion appropriately to ensure compatibility with scala-library. Also note that
+        // sbt-daffodil-utils is configured with autoScalaLibrary set to false, so there are no
+        // concerns of it transitively pulling in a newer version of scala-library that might
+        // break compatibility.
         val daffodilToPackageBinDep = Map(
           ">=4.0.0 " -> Seq(
             "org.apache.daffodil" % "daffodil-core_3" % binDaffodilVersion % cfg,

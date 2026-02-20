@@ -24,7 +24,7 @@
 
   <parserTestCase name="test01" root="test01" model="/com/example/test.dfdl.xsd">
     <document>
-      <documentPart type="text">testing</documentPart>
+      <documentPart type="file">input.txt</documentPart>
     </document>
     <infoset>
       <dfdlInfoset>
