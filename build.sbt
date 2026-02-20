@@ -74,7 +74,8 @@ lazy val plugin = (project in file("."))
     // Rat check settings
     ratExcludes := Seq(
       file(".git"),
-      file("VERSION")
+      file("VERSION"),
+      file("src/sbt-test/sbt-daffodil/versions-01/src/test/resources/com/example/input.txt")
     ),
     ratFailBinaries := true
   )
@@ -120,7 +121,13 @@ lazy val utils = (projectMatrix in file("utils"))
           )
         }
       }
-    }
+    },
+    // Do not automatically add scala-library as a dependency to the sbt-daffodil-utils jar. We
+    // expect scala-library to come from the provided Daffodil dependency. This is important
+    // because in some cases newer versions of scala-library break serialization compatability
+    // and the auto added version might be too new. When using sbt-daffodil-utils, the
+    // sbt-daffodil plugin is careful about ensuring compatability
+    autoScalaLibrary := false
   )
   .jvmPlatform(
     // We really only need Scala versions and not full ModuleIds, but using ModuleId.revision
