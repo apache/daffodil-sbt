@@ -176,11 +176,30 @@ object DaffodilPlugin extends AutoPlugin {
   }
 
   /**
-   * generate an artifact classifier name using the optional name and daffodil version
+   * Generate a classifier used for packageDaffodilBin artifacts, using the optional
+   * DaffodilBinInfo.name, the daffodil version, and the SBT configuration. The result is of the
+   * form:
+   *
+   *   [name-]daffodilXYZ[-config]
+   *
+   * Where [name-] is omitted if optName is None, daffodilXYZ is the daffodil version ID, and
+   * [-config] is omitted if it is Compile. Note that the config addition is important to
+   * indicate that non-compile resources were available when building a saved parser. For
+   * example, Test / packageDaffodilBin will have a "test" appended to the classifier,
+   * indicating it was built with test resources available and so probably should not be used in
+   * production.
    */
-  def classifierName(optName: Option[String], daffodilVersion: String): String = {
+  def packageBinClassifier(
+    optName: Option[String],
+    daffodilVersion: String,
+    config: Configuration
+  ): String = {
     val versionId = daffodilVersionId(daffodilVersion)
-    (optName.toSeq ++ Seq(versionId)).mkString("-")
+    val configClassifier = config match {
+      case Compile => None
+      case _ => Some(config.name)
+    }
+    (optName.toSeq ++ Seq(versionId) ++ configClassifier.toSeq).mkString("-")
   }
 
   /**
@@ -439,8 +458,127 @@ object DaffodilPlugin extends AutoPlugin {
     },
 
     /**
-     * define the artifacts, products, and the packageDaffodilBin task that creates the artifacts/products
+     * SBT ignores the packageDaffodilBin / logLevel setting, so we use it as the logLevel to
+     * provide to daffodil when saving a parser. We default to warn because Daffodils "info" is
+     * usually too verbose
      */
+    packageDaffodilBin / logLevel := Level.Warn,
+
+    /**
+     * JVM options used for the forked process to build saved parsers
+     *
+     * Defaults to just setting various system properties to configure loggers that might be
+     * used by different daffodil versions
+     */
+    packageDaffodilBin / javaOptions := Seq(
+      s"-Dorg.slf4j.simpleLogger.logFile=System.out",
+      s"-Dorg.slf4j.simpleLogger.defaultLogLevel=${(packageDaffodilBin / logLevel).value}",
+      s"-Dorg.apache.logging.log4j.level=${(packageDaffodilBin / logLevel).value}"
+    ),
+
+    /**
+     * These two settings tell sbt about the packageDaffodilBin artifacts and the task that
+     * generates the artifacts so it knows to generate and publish them when
+     * publish/publihLocal/publishM2 is run. We intentionally only include Compile artifacts
+     * since Test artifacts are not intended to be published or used outside of very limited
+     * uses
+     */
+    artifacts ++= {
+      if ((Compile / packageDaffodilBin / publishArtifact).value) {
+        (Compile / packageDaffodilBin / artifacts).value
+      } else {
+        Seq()
+      }
+    },
+    packagedArtifacts := {
+      if ((Compile / packageDaffodilBin / publishArtifact).value) {
+        val arts = (Compile / packageDaffodilBin / artifacts).value
+        // the products val is not used, but this is required to build saved parsers as a side effect
+        val prods = (Compile / packageDaffodilBin / products).value
+        val artFileTuples = arts.map { art =>
+          val artName = s"${art.name}-${version.value}-${art.classifier.get}.${art.extension}"
+          val artFile = target.value / artName
+          (art -> artFile)
+        }
+        packagedArtifacts.value ++ artFileTuples
+      } else {
+        packagedArtifacts.value
+      }
+    },
+
+    /**
+    * If daffodilTdmlUsesPackageBin is true, we create a resource generator to build the saved
+    * parsers and adds them as a resource for the TDML files to find and use. Note that we use a
+    * resourceGenerator since other methods make it difficult to convince IntelliJ to put the
+    * files on the test classpath. See below Test/packageBin/mappings for related changes. Note
+    * that because this is a Test resource generator, it cannot have access to Test /
+    * packageCompileBin without creating a circular dependency. So only Compile /
+    * packageDaffodilBin can be made avilable for TDML tests
+     */
+    Test / resourceGenerators += Def.taskIf {
+      if (daffodilTdmlUsesPackageBin.value) {
+
+        if (!daffodilPackageBinVersions.value.contains(daffodilVersion.value)) {
+          throw new MessageOnlyException(
+            s"daffodilPackageBinVersions (${daffodilPackageBinVersions.value.mkString(", ")}) must contain daffodilVersion (${daffodilVersion.value}) if daffodilTdmlUsesPackageBin is true"
+          )
+        }
+
+        // force creation of saved parsers, there isn't currently a way to build them for just
+        // daffodilVersion
+        val allSavedParsers = (Compile / packageDaffodilBin / products).value
+
+        // copy the saved parsers for the current daffodilVersion to the root of the
+        // resourceManaged directory, and consider those our generated resources
+        val destDir = (Test / resourceManaged).value
+        val tdmlParserFiles = daffodilPackageBinInfos.value.map { dbi =>
+          val sourceClassifier = packageBinClassifier(dbi.name, daffodilVersion.value, Compile)
+          val source = target.value / s"${name.value}-${version.value}-${sourceClassifier}.bin"
+          val destClassifier = dbi.name.map { "-" + _ }.getOrElse("")
+          val dest = destDir / s"${name.value}${destClassifier}.bin"
+          IO.copyFile(source, dest)
+          dest
+        }
+        tdmlParserFiles
+      } else {
+        Seq()
+      }
+    }.taskValue,
+
+    /**
+     * The above resource generator creates saved parsers as test resources so that tests can
+     * find them on the classpath. But this means the parsers will also be packaged in test
+     * jars. Saved parsers are already published as artifacts, so there's no reason to also
+     * include them in jars--remove them from the mapping that says which files to put in jars.
+     */
+    Test / packageBin / mappings := {
+      val existingMappings = (Test / packageBin / mappings).value
+      if (daffodilTdmlUsesPackageBin.value) {
+        val tdmlParserNames = daffodilPackageBinInfos.value.map { dbi =>
+          val destClassifier = dbi.name.map { "-" + _ }.getOrElse("")
+          s"${name.value}${destClassifier}.bin"
+        }
+        existingMappings.filterNot { case (_, name) => tdmlParserNames.contains(name) }
+      } else {
+        existingMappings
+      }
+    }
+  ) ++
+    inConfig(Compile)(packageDaffodilBinSettings) ++
+    inConfig(Test)(packageDaffodilBinSettings) ++
+    inConfig(Compile)(flatLayoutSettings("src")) ++
+    inConfig(Test)(flatLayoutSettings("test"))
+
+  /**
+   * Define the artifacts, products, and packageDaffodilBin task that creates the saved parsers
+   * and makes them available to SBT. Note that these settings must be configuration scoped
+   * (e.g. Compile/Test) because they access other tasks/settings that are configuration scoped,
+   * such as fullClasspath. This requires that these tasks to be accessed like "Compile /
+   * packageDaffodilBin / products" which creates a saved parser built using either compile or
+   * test resources. Note that users can still reference the packageDaffodilBin task without a
+   * configuration and it defaults to the Compile task.
+   */
+  def packageDaffodilBinSettings = Seq(
     packageDaffodilBin / artifacts := {
       val logger = sLog.value
       if (daffodilPackageBinVersions.value.length > 1) {
@@ -450,11 +588,7 @@ object DaffodilPlugin extends AutoPlugin {
       }
       daffodilPackageBinVersions.value.flatMap { daffodilVersion =>
         daffodilPackageBinInfos.value.map { dbi =>
-          // each artifact has the same name as the jar, in the "parser" type, "bin" extension,
-          // and daffodil version specific classifier. If dbi.name is Some, it is prepended
-          // to the classifier separated by a hyphen. Note that publishing as maven style will
-          // only use the name, extension, and classifier
-          val classifier = classifierName(dbi.name, daffodilVersion)
+          val classifier = packageBinClassifier(dbi.name, daffodilVersion, configuration.value)
           Artifact(name.value, "parser", "bin", Some(classifier), Vector(), None)
         }
       }.toSeq
@@ -466,8 +600,13 @@ object DaffodilPlugin extends AutoPlugin {
       // options to provide to the forked JVM process used to save a processor
       val jvmArgs = (packageDaffodilBin / javaOptions).value
 
-      // get all dependencies and resources of this project
-      val projectClasspath = (Compile / fullClasspath).value.files
+      // get all dependencies and resources of this configuration needed to build a saved
+      // parser. If in the Test configuration or in some Compile configurations, fullClasspath
+      // could contain the daffodil-slf4j-logger, which causes a warning because it conflicts
+      // with the slf4j-simple logger added to the daffodilXYZ ivy config, so we remove that
+      // here to avoid the warning.
+      val projectClasspath = fullClasspath.value.files
+        .filterNot { _.name.startsWith("daffodil-slf4j-logger") }
 
       val mainClass = "org.apache.daffodil.DaffodilSaver"
 
@@ -487,9 +626,10 @@ object DaffodilPlugin extends AutoPlugin {
         throw new MessageOnlyException(msg)
       }
 
+      val config = configuration.value
       val ivyConfigs = ivyConfigurations.value
-      val classpathTypesVal = (Compile / classpathTypes).value
-      val updateVal = (Compile / update).value
+      val classpathTypesVal = classpathTypes.value
+      val updateVal = update.value
 
       // FileFunction.cached creates a function that accepts files to watch. If any have
       // changed, cachedFun will call the function passing in the watched files to regenerate
@@ -513,7 +653,7 @@ object DaffodilPlugin extends AutoPlugin {
           val classpathFiles = daffodilJars ++ projectClasspath
 
           daffodilPackageBinInfos.value.map { dbi =>
-            val classifier = classifierName(dbi.name, daffodilVersion)
+            val classifier = packageBinClassifier(dbi.name, daffodilVersion, config)
             val targetName = s"${name.value}-${version.value}-${classifier}.bin"
             val targetFile = target.value / targetName
 
@@ -597,25 +737,6 @@ object DaffodilPlugin extends AutoPlugin {
       val savedParsers = cachedFun(filesToWatch)
       savedParsers.toSeq
     },
-
-    /**
-     * SBT ignores the packageDaffodilBin / logLevel setting, so we use it as the logLevel to
-     * provide to daffodil when saving a parser. We default to warn because Daffodils "info" is
-     * usually too verbose
-     */
-    packageDaffodilBin / logLevel := Level.Warn,
-
-    /**
-     * JVM options used for the forked process to build saved parsers
-     *
-     * Defaults to just setting various system properties to configure loggers that might be
-     * used by different daffodil versions
-     */
-    packageDaffodilBin / javaOptions := Seq(
-      s"-Dorg.slf4j.simpleLogger.logFile=System.out",
-      s"-Dorg.slf4j.simpleLogger.defaultLogLevel=${(packageDaffodilBin / logLevel).value}",
-      s"-Dorg.apache.logging.log4j.level=${(packageDaffodilBin / logLevel).value}"
-    ),
     packageDaffodilBin := {
       val logger = streams.value.log
 
@@ -630,96 +751,8 @@ object DaffodilPlugin extends AutoPlugin {
         )
       }
       prods
-    },
-
-    /**
-     * These two settings tell sbt about the artifacts and the task that generates the artifacts
-     * so it knows to generate and publish them when publish/publihLocal/publishM2 is run
-     */
-    artifacts ++= {
-      if ((packageDaffodilBin / publishArtifact).value) {
-        (packageDaffodilBin / artifacts).value
-      } else {
-        Seq()
-      }
-    },
-    packagedArtifacts := {
-      if ((packageDaffodilBin / publishArtifact).value) {
-        val arts = (packageDaffodilBin / artifacts).value
-        val files = (packageDaffodilBin / products).value
-
-        // the artifacts and associated files are not necessarily in the same order. For each
-        // artifact, we need to find the associated file (the one that ends with the same
-        // classifier and extension) and update the packagedArtifacts setting with that pair
-        val updatedPackagedArtifacts =
-          arts.foldLeft(packagedArtifacts.value) { case (pa, art) =>
-            val suffix = s"-${art.classifier.get}.${art.extension}"
-            val file = files.find { _.getName.endsWith(suffix) }.get
-            pa.updated(art, file)
-          }
-        updatedPackagedArtifacts
-      } else {
-        packagedArtifacts.value
-      }
-    },
-
-    /**
-    * If daffodilTdmlUsesPackageBin is true, we create a resource generator to build the saved
-    * parsers and adds them as a resource for the TDML files to find and use. Note that we use a
-    * resourceGenerator since other methods make it difficult to convince IntelliJ to put the
-    * files on the test classpath. See below Test/packageBin/mappings for related changes.
-     */
-    Test / resourceGenerators += Def.taskIf {
-      if (daffodilTdmlUsesPackageBin.value) {
-
-        if (!daffodilPackageBinVersions.value.contains(daffodilVersion.value)) {
-          throw new MessageOnlyException(
-            s"daffodilPackageBinVersions (${daffodilPackageBinVersions.value.mkString(", ")}) must contain daffodilVersion (${daffodilVersion.value}) if daffodilTdmlUsesPackageBin is true"
-          )
-        }
-
-        // force creation of saved parsers, there isn't currently a way to build them for just
-        // daffodilVersion
-        val allSavedParsers = (packageDaffodilBin / products).value
-
-        // copy the saved parsers for the current daffodilVersion to the root of the
-        // resourceManaged directory, and consider those our generated resources
-        val destDir = (Test / resourceManaged).value
-        val tdmlParserFiles = daffodilPackageBinInfos.value.map { dbi =>
-          val sourceClassifier = classifierName(dbi.name, daffodilVersion.value)
-          val source = target.value / s"${name.value}-${version.value}-${sourceClassifier}.bin"
-          val destClassifier = dbi.name.map { "-" + _ }.getOrElse("")
-          val dest = destDir / s"${name.value}${destClassifier}.bin"
-          IO.copyFile(source, dest)
-          dest
-        }
-        tdmlParserFiles
-      } else {
-        Seq()
-      }
-    }.taskValue,
-
-    /**
-     * The above resource generator creates saved parsers as test resources so that tests can
-     * find them on the classpath. But this means the parsers will also be packaged in test
-     * jars. Saved parsers are already published as artifacts, so there's no reason to also
-     * include them in jars--remove them from the mapping that says which files to put in jars.
-     */
-    Test / packageBin / mappings := {
-      val existingMappings = (Test / packageBin / mappings).value
-      if (daffodilTdmlUsesPackageBin.value) {
-        val tdmlParserNames = daffodilPackageBinInfos.value.map { dbi =>
-          val destClassifier = dbi.name.map { "-" + _ }.getOrElse("")
-          s"${name.value}${destClassifier}.bin"
-        }
-        existingMappings.filterNot { case (_, name) => tdmlParserNames.contains(name) }
-      } else {
-        existingMappings
-      }
     }
-  ) ++
-    inConfig(Compile)(flatLayoutSettings("src")) ++
-    inConfig(Test)(flatLayoutSettings("test"))
+  )
 
   /**
    * If daffodilFlatLayout is true, returns settings to make a flat directory layout. All
