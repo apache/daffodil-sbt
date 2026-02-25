@@ -304,6 +304,17 @@ object DaffodilPlugin extends AutoPlugin {
         ">=3.0.0 <3.2.0" -> Seq(
           "org.apache.daffodil" %% "daffodil-tdml-processor" % daffodilVersion.value % "test"
         ),
+        // It is not uncommon for projects to implement their own test harness using Daffodil
+        // APIs. This requires manually adding daffodil-japi or daffodil-sapi to
+        // libraryDependencies, and can add extra complexity to build.sbt configurations,
+        // especially when crossDaffodilVersions is used. For simplification and convenience,
+        // add those API jars as "test" dependencies. Note that we do not need to do this for
+        // Daffodil 4.0.0 and newer since their APIs are in daffodil-core which
+        // daffodil-tdml-junit (added above) transitively depends on
+        "<=3.11.0" -> Seq(
+          "org.apache.daffodil" %% "daffodil-japi" % daffodilVersion.value % "test",
+          "org.apache.daffodil" %% "daffodil-sapi" % daffodilVersion.value % "test"
+        ),
         // junit dependencies
         ">=3.0.0" -> Seq(
           "junit" % "junit" % "4.13.2" % "test",
