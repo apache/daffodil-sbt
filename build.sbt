@@ -90,9 +90,8 @@ lazy val utils = (projectMatrix in file("utils"))
   .settings(
     javacOptions ++= {
       scalaBinaryVersion.value match {
-        case "2.12" => Seq("-target", "8")
-        case "2.13" => Seq("-target", "8")
-        case "3" => Seq("-target", "17")
+        case "2.12" | "2.13" => Seq("--release", "8")
+        case "3" => Seq("--release", "17")
       }
     },
     scalacOptions ++= {
