@@ -253,7 +253,7 @@ containing saved parsers could be added to the `test` classpath like this:
 ```scala
 Test / dependencyClasspath ++= {
     val savedParsers = update.value.matching(artifactFilter(`type` = "parser"))
-    val savedParserDirs = savedParser.map(_.toParentFile)
+    val savedParserDirs = savedParsers.map(_.getParentFile)
     savedParserDirs
 }
 ```
