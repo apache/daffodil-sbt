@@ -18,8 +18,12 @@
 package org.apache.daffodil
 
 import java.io.File
+import java.net.{ URI, URL, URLClassLoader }
+import java.nio.charset.Charset
+import java.nio.file.{ FileSystem, FileSystems, Files, Paths }
 import scala.language.implicitConversions
 import scala.util.Properties
+import scala.util.matching.Regex
 
 import sbt.Keys._
 import sbt._
@@ -62,6 +66,15 @@ object DaffodilPlugin extends AutoPlugin {
     )
     val daffodilTdmlUsesPackageBin = settingKey[Boolean](
       "Whether or not TDML files use the saved parsers created by daffodilPackageBin"
+    )
+    val daffodilFlattenTarget = settingKey[File](
+      "File to write the flattened schemas package to"
+    )
+    val daffodilFlattenSchemas = taskKey[Unit](
+      "flatten the directory structure of all schemas and schema dependencies to a single common directory and update 'schemaLocation' paths to match"
+    )
+    val daffodilFlattenResourceReferencePatterns = settingKey[Seq[Regex]](
+      """Sequence of patterns that will match resource references, ie 'schemaLocation="/org/apache/..."'. Note that the pattern must capture the reference in the first capture group"""
     )
 
     /**
@@ -593,6 +606,259 @@ object DaffodilPlugin extends AutoPlugin {
       } else {
         existingMappings
       }
+    },
+
+    /**
+     * Everything below here is for daffodilFlattenSchemas
+     */
+    daffodilFlattenTarget := target.value / s"${name.value}-${version.value}-flat.zip",
+
+    /**
+     * Whether or not to publish the flattened schemas zip. Defaults to false.
+     *
+     * If projects want to publish flattened schemas then they must explicitly enable it by
+     * setting 'daffodilFlattenSchemas / publishArtifact := true'.
+     *
+     * If false, flattened schemas will not be created unless you explicitly run the
+     * daffodilFlattenSchemas.
+     */
+    daffodilFlattenSchemas / publishArtifact := true,
+
+    daffodilFlattenSchemas / artifact := Artifact(
+      name.value,
+      "flat",
+      "zip",
+      Some("flat"),
+      Vector(),
+      None
+    ),
+
+    /**
+     * Only grab the file types that need to be flattened. These files are only
+     * grabbed from the root project. Any referenced files will be pulled in
+     * from the classpath. Note that XML files are commonly used in XSLT for
+     * settings.
+     */
+    daffodilFlattenSchemas / includeFilter := "*.xsd" | "*.xsl" | "*.xslt" | "*.xml",
+    daffodilFlattenSchemas / excludeFilter := HiddenFileFilter,
+
+    daffodilFlattenResourceReferencePatterns := List(
+      """(?<!xsi:)schemaLocation=\"([^\"]*)\"""".r,
+      "href=\"([^\"]*)\"".r,
+      "document[(]'([^']*)'[)]".r
+    ),
+
+    daffodilFlattenSchemas / products := {
+
+      val logger = streams.value.log
+      val filter =
+        (daffodilFlattenSchemas / includeFilter).value -- (daffodilFlattenSchemas / excludeFilter).value
+
+      val flatDir = target.value / "flatDir"
+      if (flatDir.exists())
+        IO.delete(flatDir)
+      IO.createDirectory(flatDir)
+
+      val projectURIs = (Compile / resourceDirectories).value.map { root =>
+        (root ** filter).get.map(_.toURI).toList
+      }.flatten
+
+      val resourceDirURLs = (Compile / resourceDirectories).value
+        .filter(_.exists())
+        .map(_.toURI.toURL)
+
+      /**
+       * Create a URLClassLoader object with URLs to all resources used by the
+       * project. The class loader will be used to resolve references made
+       * within the flattened files.
+       */
+      val allClasspathURLs = (Test / externalDependencyClasspath).value.map(_.data.toURI.toURL)
+      val classLoader = new URLClassLoader((resourceDirURLs ++ allClasspathURLs).toArray)
+
+      val referenceRegexes = daffodilFlattenResourceReferencePatterns.value
+      val jarRegex = "jar:file:(.*/(.*).jar)!(.*)".r
+      val jarFileSystems = scala.collection.mutable.Map[String, FileSystem]()
+
+      def getRootPath(path: URI) = {
+        path.getScheme match {
+          case "file" => {
+            (Compile / resourceDirectories).value
+              .find(dir => Paths.get(path).startsWith(dir.getPath))
+              .get
+              .toPath
+          }
+        }
+      }
+
+      val seen = scala.collection.mutable.Set[URL]()
+      val unprocessed = scala.collection.mutable.Stack[URI]()
+      val unresolved = scala.collection.mutable.ArrayBuffer[(URI, String)]()
+      unprocessed.pushAll(projectURIs)
+      seen ++= projectURIs.map(_.toURL)
+      while (!unprocessed.isEmpty) {
+        val contextURI = unprocessed.pop
+        val bytes = contextURI.toURL.openStream().readAllBytes()
+
+        // Get a Java Path for the current file (whether it is in a JAR or
+        // just a regular file) and a Path for where the current file will be
+        // moved to in the flattened directory structure.  Note that using a
+        // Java Path on a regular file will use the default FileSystem while for
+        // JARs a FileSystem is created for interacting with the files inside
+        // the JAR. This allows all Path functions like resolveSibling/exists to
+        // work with both regular files or files contained inside a JAR.
+        val (contextPath, flatPath) = contextURI.getScheme match {
+          case "jar" =>
+            contextURI.toString match {
+              case jarRegex(jarPath, jarName, path) => {
+                val fs = jarFileSystems.getOrElseUpdate(
+                  jarPath.replaceAll("/+", "/"),
+                  FileSystems.newFileSystem(contextURI, new java.util.HashMap[String, Any]())
+                )
+                val cPath = fs.getPath(path)
+                (
+                  cPath,
+                  Paths.get(
+                    flatDir.toString,
+                    s"${jarName}__${cPath.toString.tail.replaceAll("/", "__")}"
+                  )
+                )
+              }
+              case _ =>
+                throw new IllegalArgumentException(s"Unable to parse JAR URI: $contextURI")
+            }
+          case "file" => {
+            val path = Paths.get(contextURI)
+            val root = getRootPath(contextURI)
+            (
+              path,
+              Paths.get(
+                flatDir.toString,
+                root.relativize(path).toString.replaceAllLiterally(File.separator, "__")
+              )
+            )
+          }
+          case _ =>
+            throw new IllegalArgumentException(s"Unrecognized URI scheme: $contextURI")
+        }
+
+        assert(
+          !Files.exists(flatPath),
+          s"File $flatPath already exists and would be overwritten, aborting!"
+        )
+        val bw = Files.newBufferedWriter(flatPath)
+        val fileAsString = new String(bytes, Charset.defaultCharset())
+
+        val references = referenceRegexes.flatMap { re =>
+          re.findAllIn(fileAsString).matchData.map(_.group(1))
+        }
+
+        val resolvedRefs = references.flatMap { ref =>
+          val optResolved = if (ref.startsWith("/")) {
+            // Dealing with an absolute path
+            Option(classLoader.findResource(ref.tail))
+          } else {
+            // Relative path
+            val refPath = contextPath.resolveSibling(ref).normalize()
+            if (Files.exists(refPath)) {
+              // Referenced path exists in either the same root resource
+              // diretory or jar file as the context schema
+              Some(refPath.toUri.toURL)
+            } else {
+              val optResolvedRelative = contextURI.getScheme match {
+                case "file" => {
+                  // Need to check other resource directories
+                  val contextRoot = getRootPath(contextURI)
+                  val relPath = contextRoot.relativize(refPath)
+                  val resolvedRoot = (Compile / resourceDirectories).value.find(root =>
+                    Files.exists(root.toPath.resolve(relPath))
+                  )
+                  resolvedRoot.map(_.toPath.resolve(relPath).toUri.toURL)
+                }
+                case "jar" =>
+                  // Nothing else to check, resolveSibling should have found it in the same jar
+                  None
+              }
+              // The orElse call is to support the deprecated behavior of
+              // resolving relative paths asif they were absolute
+              optResolvedRelative.orElse(Option(classLoader.findResource(ref)))
+            }
+          }
+          if (optResolved.isEmpty)
+            unresolved.append((contextURI, ref))
+          optResolved.map(resolved => ref -> resolved)
+        }.toMap
+
+        val updatedFileAsString = {
+          resolvedRefs.foldLeft(fileAsString) {
+            case (input, (ref, optResolvedURL)) => {
+              // For each reference replace each instance of it in the
+              // file with the same reference but with "/" changed to "__"
+              val resolvedURI = optResolvedURL.toURI
+              val relativized = resolvedURI.getScheme match {
+                case "jar" =>
+                  resolvedURI.toString match {
+                    case jarRegex(_, jarName, path) =>
+                      s"$jarName/${path.tail}"
+                  }
+                case _ => {
+                  val resolvedRoot = getRootPath(resolvedURI)
+                  resolvedRoot.relativize(Paths.get(resolvedURI)).toString
+                }
+              }
+              input.replaceAll(ref, relativized.replaceAll("/", "__"))
+            }
+          }
+        }
+
+        bw.write(updatedFileAsString)
+        bw.close()
+        val unseen = resolvedRefs.values.filter(seen.add(_))
+        unprocessed.pushAll(unseen.map(_.toURI))
+      }
+
+      // Close any open JAR FileSystems
+      jarFileSystems.values.foreach(_.close())
+
+      // Error unresolved references
+      unresolved.foreach { case (context, ref) =>
+        logger.error(s"Unable to resolve reference to $ref from source file $context")
+      }
+
+      // Error out if we have any unresolved references
+      if (!unresolved.isEmpty)
+        throw new MessageOnlyException(
+          "Unable to resolve one or more references while flattening"
+        )
+
+      /* Create zip file containing all flattened schemas */
+      val flattenedFiles = IO.listFiles(flatDir).sorted
+      val sources = flattenedFiles.map(file => file -> file.getName())
+      IO.zip(sources, daffodilFlattenTarget.value, Package.defaultTimestamp)
+      logger.info(
+        s"Generated flattened schema package at ${daffodilFlattenTarget.value.toString}"
+      )
+      Seq(daffodilFlattenTarget.value)
+    },
+
+    daffodilFlattenSchemas := {
+      (daffodilFlattenSchemas / products).value.head
+    },
+
+    artifacts ++= {
+      if ((daffodilFlattenSchemas / publishArtifact).value) {
+        Seq((daffodilFlattenSchemas / artifact).value)
+      } else {
+        Seq.empty
+      }
+    },
+    packagedArtifacts ++= {
+      if ((daffodilFlattenSchemas / publishArtifact).value) {
+        Map(
+          (daffodilFlattenSchemas / artifact).value -> (daffodilFlattenSchemas / products).value.head
+        )
+      } else {
+        Map.empty[Artifact, File]
+      }
     }
   ) ++
     inConfig(Compile)(packageDaffodilBinSettings) ++
@@ -950,7 +1216,10 @@ object DaffodilPlugin extends AutoPlugin {
         publish := {},
         publishLocal := {},
         publishM2 := {},
-        publish / skip := true
+        publish / skip := true,
+        // Only the root project should create/publish flattened schemas
+        daffodilFlattenSchemas / products := Seq(),
+        daffodilFlattenSchemas / publishArtifact := false
       )
 
       // create a subproject for each of the daffodil cross versions. Each subproject is a clone
