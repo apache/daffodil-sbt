@@ -323,6 +323,72 @@ root `src/` directory, and all test source and resource files to be in a root
 `test/` directory. Source files are those that end with `*.scala` or `*.java`,
 and resource files are anything else.
 
+### Flatten Schemas
+
+Many non-Daffodil XML/XSD programs (such as XML validators) do not resolve
+schemaLocation's in the same way that Daffodil does and will often stuggle to
+find schemas that aren't in the same directory as the root schema. By flattening
+the directory structure at a common root (ie the directory containing 'com/'
+and/or 'org/' we can rename all of the schemas while avoiding any conflicts in
+schema name for generically named schemas, like 'baseFormat.dfdl.xsd'. Having
+all of the schemas and schemaLocation's renamed should allow tools with less
+robust schemaLocation resolvers to just work.
+
+This plugin has functionality to flatten the directory structure of 1 or more
+schema projects, renaming the schema files and upating schemaLocation's as
+necessary.
+
+```bash
+sbt daffodilFlattenSchemas
+```
+
+The renaming works as follows:
+
+`org/apache/daffodil/xsd/main.dfdl.xsd`
+
+will be renamed to:
+
+`org__apache__daffodil__xsd__main.dfdl.xsd`
+
+Note: Original files are not modified, they are simply copied to the specified
+output directory with the new name and updated schemaLocation's.
+
+#### Flatten Schemas Settings
+
+
+##### daffodilFlattenSchemasTarget
+
+Sets the target path for outputting the flattened schema zip file.
+
+Default location: `<name>-<version>-flat.zip` in the `target/` directory.
+
+##### daffodilFlattenSchemasReferencePatterns
+
+Defines the regular expression patterns used for matching references in schema
+documents.  The regular expressions must define a capture group to the reference
+string.
+
+By default it supports XSD include/import `schemaLocation` and XSLT
+`href/document` attributes.
+
+##### daffodilFlattenSchemas / includeFilter
+
+Defines a filter for detecting which files in the resource directories of the
+current project should be included in the flattened schema package. Files from
+the current projects dependencies will be added if they are referenced by the
+current project's schema files.
+
+By default only files with the following extensions are included:
+`*.xsd | *.xsl | *.xslt | *.xml`
+
+##### daffodilFlattenSchemas / excludeFilter
+
+Defines a filter for which files to exclude from the flattened schema package.
+Again this setting only effects files from the current project. It will not
+effect files from dependencies of the current project.
+
+Hidden files/directories are excluded by default.
+
 ### Cross-Building
 
 In some cases it is helpful to have a single SBT project that supports the
