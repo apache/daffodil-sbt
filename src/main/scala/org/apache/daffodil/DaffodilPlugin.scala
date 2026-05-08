@@ -17,13 +17,12 @@
 
 package org.apache.daffodil
 
+import scala.collection.mutable.ArrayBuffer
+
 import java.io.File
-import java.net.URI
+import java.net.URLClassLoader
 import java.nio.charset.Charset
-import java.nio.file.{ FileSystems, Files, Path, Paths, StandardCopyOption }
-import java.util.HashMap
-import java.util.zip.{ ZipEntry, ZipOutputStream }
-import scala.collection.JavaConverters._
+import java.nio.file.{ Files, Paths }
 import scala.language.implicitConversions
 import scala.util.Properties
 
@@ -69,17 +68,17 @@ object DaffodilPlugin extends AutoPlugin {
     val daffodilTdmlUsesPackageBin = settingKey[Boolean](
       "Whether or not TDML files use the saved parsers created by daffodilPackageBin"
     )
-    val flattenTarget = settingKey[File](
+    val daffodilFlattenTarget = settingKey[File](
       "File to write the flattened schemas package to"
     )
-    val flattenSchemas = taskKey[File](
+    val daffodilFlattenSchemas = taskKey[File](
       "flatten the directory structure of all schemas and schema dependencies to a single common directory and update 'schemaLocation' paths to match"
     )
-    val flattenExcludes = settingKey[Seq[Glob]](
-      "Globs of paths to exclude from schema flattening"
+    val daffodilFlattenIncludes = settingKey[FileFilter](
+      "File extensions to include when flattening resources. Defaults to *.xsd | *.xsl | *.xslt | *.xml"
     )
-    val flattenIncludes = settingKey[Seq[Glob]](
-      "Globs of paths to include for schema flattening, even if the path is listed in flattenExcludes"
+    val daffodilFlattenExcludes = settingKey[FileFilter](
+      "Globs of paths to exclude from schema flattening"
     )
 
     /**
@@ -617,7 +616,7 @@ object DaffodilPlugin extends AutoPlugin {
     inConfig(Test)(packageDaffodilBinSettings) ++
     inConfig(Compile)(flatLayoutSettings("src")) ++
     inConfig(Test)(flatLayoutSettings("test")) ++
-    inConfig(Compile)(flattenerSettings)
+    inConfig(Compile)(daffodilFlattenSettings)
 
   /**
    * Define the artifacts, products, and packageDaffodilBin task that creates the saved parsers
@@ -859,44 +858,29 @@ object DaffodilPlugin extends AutoPlugin {
     }
   }
 
-  def flattenerSettings: Seq[Setting[_]] = Seq(
-    flattenTarget := target.value / s"${name.value}-${version.value}-flat.zip",
-    /* Paths in flattenExcludes/Includes that are not globbed at the start are
+  def daffodilFlattenSettings: Seq[Setting[_]] = Seq(
+    daffodilFlattenTarget := target.value / s"${name.value}-${version.value}-flat.zip",
+    /* Paths in daffodilFlattenExcludes/Includes that are not globbed at the start are
      * generally only going to match paths within JAR files on the classpath.
      * In order to deal with paths on the filesystem we need to glob the start
      * of the path to account for different directory structure before the
      * schema project path.
      */
-    flattenExcludes := Seq(
-      // "**/src/test/resources/**",
-      // "Log4j*.xsd",
-      // "xsd/**", // This is coming from XSAT2
-      // "IBMdefined/**",
-      // "org/apache/xml/**",
-      // "edu/illinois/ncsa/daffodil/**",
-      "org/apache/daffodil/**"
-      // "**/*-tests.jar",
-      // "META-INF/**",
-      // "com/ibm/icu/**",
-      // "eclipse-xml-catalog.xml",
-      // "daffodil-built-in-catalog.xml"
-    ),
-    flattenIncludes := Seq(
-      "org/apache/daffodil/xsd/DFDLGeneralFormat*.dfdl.xsd"
-    ),
+    daffodilFlattenIncludes := "*.xsd" | "*.xsl" | "*.xslt" | "*.xml",
+    daffodilFlattenExcludes := HiddenFileFilter,
 
     /**
      * Whether or not to publish the flattened schemas zip. Defaults to false.
      *
      * If projects want to publish flattened schemas then they must explicitly enable it by
-     * setting 'flattenSchemas / publishArtifact := true'.
+     * setting 'daffodilFlattenSchemas / publishArtifact := true'.
      *
      * If false, flattened schemas will not be created unless you explicitly run the
-     * flattenSchemas.
+     * daffodilFlattenSchemas.
      */
-    flattenSchemas / publishArtifact := false,
+    daffodilFlattenSchemas / publishArtifact := false,
 
-    flattenSchemas / artifact := Artifact(
+    daffodilFlattenSchemas / artifact := Artifact(
       name.value,
       "flat",
       "zip",
@@ -904,50 +888,19 @@ object DaffodilPlugin extends AutoPlugin {
       Vector(),
       None
     ),
-    flattenSchemas := {
+    daffodilFlattenSchemas := {
 
       val logger = streams.value.log
+      val filter = daffodilFlattenIncludes.value -- daffodilFlattenExcludes.value
 
-      val extractDir = Paths.get(target.value.getPath(), "flatExtractDir")
-      if (Files.exists(extractDir))
-        IO.delete(extractDir.toFile)
-      Files.createDirectory(extractDir)
+      val flatDir = target.value / "flatDir"
+      if (flatDir.exists())
+        IO.delete(flatDir)
+      IO.createDirectory(flatDir)
 
-      val flatDir = Paths.get(target.value.getPath(), "flatDir")
-      if (Files.exists(flatDir))
-        IO.delete(flatDir.toFile)
-      Files.createDirectory(flatDir)
-
-      val projectXsdFiles = (Compile / resourceDirectories).value
-        .flatMap { dir => (dir ** "*.xsd").get }
-        .map(path => Paths.get(path.toString))
-      val projectXslFiles = (Compile / resourceDirectories).value
-        .flatMap { dir => (dir ** ("*.xsl" || "*.xslt")).get }
-        .map(path => Paths.get(path.toString))
-      val projectXmlFiles = (Compile / resourceDirectories).value
-        .flatMap { dir => (dir ** "*.xml").get }
-        .map(path => Paths.get(path.toString))
-
-      /* Copy schema files from the current project's src/main/resources
-       * directory
-       */
-      val filesFromProject =
-        (projectXsdFiles ++ projectXslFiles ++ projectXmlFiles).filterNot { path =>
-          val matchesExcludes = flattenExcludes.value.exists(glob => glob.matches(path))
-          val matchesIncludes = flattenIncludes.value.exists(glob => glob.matches(path))
-          matchesExcludes && !matchesIncludes
-        }
-
-      val extractedProjectFiles = filesFromProject.map { origPath =>
-        val resourcePath = Paths
-          .get((Compile / resourceDirectories).value(0).toString)
-          .relativize(origPath)
-          .toString
-        val newPath = Paths.get(extractDir.toString, resourcePath)
-        Files.createDirectories(newPath.getParent())
-        Files.copy(origPath, newPath, StandardCopyOption.REPLACE_EXISTING)
-        newPath
-      }
+      val projectResources = (Compile / resourceDirectories).value
+        .map { root => root.toURI.toURL -> (root ** filter).get.map(_.toURI.toURL).toList }
+        .toMap
 
       /* Get all dependency jars and resources specific to this project. Note
        * that the "Test" configuration is used for JAR files in order to ensure
@@ -960,79 +913,41 @@ object DaffodilPlugin extends AutoPlugin {
        * only need Compile/resources from this project and Test/dependency jars
        * from external projects
        */
-      val projectJarFiles = (Test / externalDependencyClasspath).value.files.flatMap { file =>
-        (file ** "*.jar").get
-      }
-
-      projectJarFiles.reverse.map { jar =>
-        val env = new HashMap[String, String]
-        val fs = FileSystems.newFileSystem(URI.create(s"jar:file:${jar}"), env)
-        val rootDirs = fs.getRootDirectories().asScala
-        rootDirs.foreach { dir =>
-          val xsdFiles = Files.walk(dir).iterator().asScala.filter(_.toString.endsWith(".xsd"))
-
-          // Includes XML files as they may be used for configuration of the XSLT
-          val xsltFiles = Files
-            .walk(dir)
-            .iterator()
-            .asScala
-            .toList
-            .filter(f =>
-              f.toString.endsWith(".xslt") || f.toString.endsWith(".xsl") || f.toString
-                .endsWith(".xml")
-            )
-
-          /* For each XSD file we have, we want to extract it from its original
-           * jar while maintaining its path from inside the jar, ex:
-           * com.owlcyberdefense.whatever.jar:com/owlcyberdefense/whatever/xsd/whatever.xsd
-           *
-           * extracts to
-           *
-           * target/flatExtractDir/com/owlcyberdefense/whatever/xsd/whatever.xsd
-           *
-           * We also want to exclude schemas from paths listed in flattenExcludes
-           * that are not also listed in flattenIncludes
-           */
-          val filesToExtract = (xsdFiles ++ xsltFiles).filterNot { path =>
-            val matchesExcludes = flattenExcludes.value.exists(glob => glob.matches(path))
-            val matchesIncludes = flattenIncludes.value.exists(glob => glob.matches(path))
-            matchesExcludes && !matchesIncludes
-          }
-
-          filesToExtract.foreach { origPath =>
-            val newPath = Paths.get(extractDir.toString, origPath.toString)
-            Files.createDirectories(newPath.getParent())
-            Files.copy(origPath, newPath, StandardCopyOption.REPLACE_EXISTING)
-          }
-        }
-        fs.close()
-      }
+      val projectURLs = (Compile / resourceDirectories).value.map(_.toURI.toURL)
+      val allClasspathURLs = (Compile / fullClasspath).value.map(_.data.toURI.toURL)
+      val classLoader = new URLClassLoader((projectURLs ++ allClasspathURLs).toArray, null)
 
       val schemaLocationPattern = """schemaLocation=\"([^\"]*)\"""".r
       val hrefPattern = "href=\"([^\"]*)\"".r
       val documentPattern = "document[(]'([^']*)'[)]".r
       val referenceRegexes = List(schemaLocationPattern, hrefPattern, documentPattern)
-      val extractedFiles =
-        Files.walk(extractDir).iterator().asScala.filter(Files.isRegularFile(_))
 
       val referencedFiles = {
         // This annotation simply warns if the compiler cannot enable tail call optimization
         @scala.annotation.tailrec
-        def getReferences(parents: Seq[Path], acc: Seq[Path] = List.empty): Seq[Path] = {
+        def getReferences(root: URL, parents: Seq[URL], acc: ArrayBuffer[URL]): Seq[URL] = {
+          val rootPath = Paths.get(root.toURI)
           parents match {
+            // Already processed this file (h), proceed with rest of files (t)
             case h :: t if (acc.contains(h)) =>
               getReferences(
+                root,
                 t,
                 acc
-              ) // Already processed this file (h), proceed with rest of files (t)
-            case h :: t => { // Need to process this file (h)
-              val resourcePath = extractDir.relativize(h)
+              )
+            // Need to process this file (h)
+            case h :: t => {
+              val relPath = h.toString match {
+                case j if (j.startsWith("jar:")) => Paths.get(j.toString.split("!")(1).tail)
+                case f if (f.startsWith("file:")) => rootPath.relativize(Paths.get(h.toURI))
+              }
+              val bytes = h.openStream().readAllBytes()
               val newPath = Paths.get(
                 flatDir.toString,
-                extractDir.relativize(h).toString.replaceAll("/", "__")
+                relPath.toString.replaceAll("/", "__")
               )
               val bw = Files.newBufferedWriter(newPath)
-              val fileAsString = new String(Files.readAllBytes(h), Charset.defaultCharset())
+              val fileAsString = new String(bytes, Charset.defaultCharset())
               val references = {
                 referenceRegexes.flatMap { re =>
                   re.findAllIn(fileAsString).matchData.map(_.group(1))
@@ -1044,35 +959,28 @@ object DaffodilPlugin extends AutoPlugin {
               val resolvedReferences = references
                 .map { ref =>
                   val origLocation = {
-                    if (ref.contains("urn:"))
-                      ref.split(" ")(1)
+                    if (ref.contains("urn:")) {
+                      val urn = ref.split(" ")(1)
+                      if (urn.startsWith("/"))
+                        urn.tail
+                      else
+                        urn
+                    } else if (ref.startsWith("/"))
+                      ref.tail
                     else
                       ref
                   }
-
-                  val resolvedPath: Option[Path] = {
-                    if (Files.exists(Paths.get(extractDir.toString, origLocation))) {
-                      // Original schemaLocation is full path, ex:
-                      // com/whatever/schema.xsd
-                      Some(Paths.get(extractDir.toString, origLocation))
-                    } else if (Files.exists(Paths.get(h.getParent().toString, origLocation))) {
-                      // Original schemaLocation is a relative path to the current
-                      // schema
-                      Some(Paths.get(h.getParent().toString, origLocation).normalize())
-                    } else if (origLocation.startsWith("http")) {
-                      None
-                    } else {
-                      if (origLocation.contains("DFDLGeneralFormat"))
-                        throw new MessageOnlyException(
-                          s"Unable to locate file: $origLocation, required by: $h. Consider adding 'daffodil-lib' to this project's list of dependencies"
-                        )
-                      else
-                        throw new MessageOnlyException(
-                          s"Unable to locate file: $origLocation, required by: $h"
-                        )
-                    }
+                  val res = {
+                    val r = classLoader.findResource(origLocation)
+                    if (r == null) {
+                      val rrel = List(relPath.getParent, origLocation).mkString("/")
+                      classLoader.findResource(rrel)
+                    } else
+                      r
                   }
-                  ref -> resolvedPath
+                  if (res == null)
+                    logger.warn(s"Unable to resolve reference to $ref from source file $h")
+                  ref -> Option(res)
                 }
                 .toMap
                 .filter(e => e._2.isDefined)
@@ -1083,10 +991,12 @@ object DaffodilPlugin extends AutoPlugin {
                   case (input, (ref, resolvedRef)) => {
                     // For each reference replace each instance of it in the
                     // file with the same reference but with "/" changed to "__"
-                    input.replaceAll(
-                      ref,
-                      extractDir.relativize(resolvedRef.get).toString.replaceAll("/", "__")
-                    )
+                    val rref = resolvedRef.get.toString
+                    val relativized = rref match {
+                      case j if (j.startsWith("jar")) => j.split("!")(1).tail
+                      case f if (f.startsWith("file")) => rootPath.relativize(Paths.get(resolvedRef.get.toURI)).toString
+                    }
+                    input.replaceAll(ref, relativized.tail.replaceAll("/", "__"))
                   }
                 }
               }
@@ -1099,42 +1009,41 @@ object DaffodilPlugin extends AutoPlugin {
                * file. Add this file to the accumulator list
                */
               getReferences(
+                root,
                 t ++ resolvedReferences.values
-                  .collect { case Some(path) => path }
+                  .collect { case Some(url) => url }
                   .filterNot(t.contains),
-                acc :+ h
+                acc += h
               )
             }
             case _ => acc // Have processed all referenced files, return acc
           }
         }
-        getReferences(extractedProjectFiles)
+        val acc = new ArrayBuffer[URL]()
+        projectResources foreach { case (root, files) =>
+          getReferences(root, files, acc)
+        }
+        acc
       }
 
       /* Create zip file containing all flattened schemas */
-      val flattenedFiles = Files.list(flatDir).iterator().asScala.filter(Files.isRegularFile(_))
-      val zipPath = Paths.get(flattenTarget.value.toString)
-      val zos = new ZipOutputStream(Files.newOutputStream(zipPath))
-      flattenedFiles.foreach { file =>
-        zos.putNextEntry(new ZipEntry(flatDir.relativize(file).toString))
-        Files.copy(file, zos)
-        zos.closeEntry()
-      }
-      zos.close()
-      logger.info(s"Generated flattened schema package at ${flattenTarget.value.toString}")
-      flattenTarget.value
+      val flattenedFiles = IO.listFiles(flatDir)
+      val sources = flattenedFiles.map(file => file -> file.getName())
+      IO.zip(sources, daffodilFlattenTarget.value, Some(System.currentTimeMillis()))
+      logger.info(s"Generated flattened schema package at ${daffodilFlattenTarget.value.toString}")
+      daffodilFlattenTarget.value
     },
 
     artifacts ++= {
-      if ((flattenSchemas / publishArtifact).value) {
-        Seq((flattenSchemas / artifact).value)
+      if ((daffodilFlattenSchemas / publishArtifact).value) {
+        Seq((daffodilFlattenSchemas / artifact).value)
       } else {
         Seq.empty
       }
     },
     packagedArtifacts ++= {
-      if ((flattenSchemas / publishArtifact).value) {
-        Map((flattenSchemas / artifact).value -> flattenSchemas.value)
+      if ((daffodilFlattenSchemas / publishArtifact).value) {
+        Map((daffodilFlattenSchemas / artifact).value -> daffodilFlattenSchemas.value)
       } else {
         Map.empty[Artifact, File]
       }
