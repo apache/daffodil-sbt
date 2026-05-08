@@ -996,7 +996,7 @@ object DaffodilPlugin extends AutoPlugin {
                       case j if (j.startsWith("jar")) => j.split("!")(1).tail
                       case f if (f.startsWith("file")) => rootPath.relativize(Paths.get(resolvedRef.get.toURI)).toString
                     }
-                    input.replaceAll(ref, relativized.tail.replaceAll("/", "__"))
+                    input.replaceAll(ref, relativized.replaceAll("/", "__"))
                   }
                 }
               }
