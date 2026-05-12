@@ -17,10 +17,10 @@
 
 package org.apache.daffodil
 
-import scala.collection.mutable.ArrayBuffer
+import scala.util.matching.Regex
 
 import java.io.File
-import java.net.URLClassLoader
+import java.net.{ URI, URLClassLoader }
 import java.nio.charset.Charset
 import java.nio.file.{ Files, Paths }
 import scala.language.implicitConversions
@@ -74,13 +74,9 @@ object DaffodilPlugin extends AutoPlugin {
     val daffodilFlattenSchemas = taskKey[File](
       "flatten the directory structure of all schemas and schema dependencies to a single common directory and update 'schemaLocation' paths to match"
     )
-    val daffodilFlattenIncludes = settingKey[FileFilter](
-      "File extensions to include when flattening resources. Defaults to *.xsd | *.xsl | *.xslt | *.xml"
+    val daffodilFlattenResourceReferencePatterns = settingKey[Seq[Regex]](
+      """Sequence of patterns that will match resource references, ie 'schemaLocation="/org/apache/..."'. Note that the pattern must capture the reference in the first capture group"""
     )
-    val daffodilFlattenExcludes = settingKey[FileFilter](
-      "Globs of paths to exclude from schema flattening"
-    )
-
     /**
      * Class to define daffodilPackageBinInfos, auto-imported to simplify sbt configs
      */
@@ -860,14 +856,6 @@ object DaffodilPlugin extends AutoPlugin {
 
   def daffodilFlattenSettings: Seq[Setting[_]] = Seq(
     daffodilFlattenTarget := target.value / s"${name.value}-${version.value}-flat.zip",
-    /* Paths in daffodilFlattenExcludes/Includes that are not globbed at the start are
-     * generally only going to match paths within JAR files on the classpath.
-     * In order to deal with paths on the filesystem we need to glob the start
-     * of the path to account for different directory structure before the
-     * schema project path.
-     */
-    daffodilFlattenIncludes := "*.xsd" | "*.xsl" | "*.xslt" | "*.xml",
-    daffodilFlattenExcludes := HiddenFileFilter,
 
     /**
      * Whether or not to publish the flattened schemas zip. Defaults to false.
@@ -888,10 +876,25 @@ object DaffodilPlugin extends AutoPlugin {
       Vector(),
       None
     ),
-    daffodilFlattenSchemas := {
+
+    /**
+     * Only grab the file types that need to be flattened. These files are only
+     * grabbed from the root project. Any referenced files will be pulled in
+     * from the classpath. Note that XML files are commonly used in XSLT for
+     * settings.
+     */
+    daffodilFlattenSchemas / includeFilter := "*.xsd" | "*.xsl" | "*.xslt" | "*.xml",
+    daffodilFlattenSchemas / excludeFilter := HiddenFileFilter,
+
+    daffodilFlattenResourceReferencePatterns := List(
+        """schemaLocation=\"([^\"]*)\"""".r,
+        "href=\"([^\"]*)\"".r,
+        "document[(]'([^']*)'[)]".r),
+
+    daffodilFlattenSchemas / products := {
 
       val logger = streams.value.log
-      val filter = daffodilFlattenIncludes.value -- daffodilFlattenExcludes.value
+      val filter = (daffodilFlattenSchemas / includeFilter).value -- (daffodilFlattenSchemas / excludeFilter).value
 
       val flatDir = target.value / "flatDir"
       if (flatDir.exists())
@@ -902,136 +905,110 @@ object DaffodilPlugin extends AutoPlugin {
         .map { root => root.toURI.toURL -> (root ** filter).get.map(_.toURI.toURL).toList }
         .toMap
 
-      /* Get all dependency jars and resources specific to this project. Note
-       * that the "Test" configuration is used for JAR files in order to ensure
-       * we pull in XSD files from daffodil-lib, as in many schema projects the
-       * daffodil dependencies are only used for testing, not compiling. Also
-       * note that we want to use Test/externalDependencyClasspath to get
-       * dependency jars, and not something like Test/fullClasspath or
-       * Test/dependencyClasspath, since those could trigger expensive resource
-       * generators or compilation of internal test jars that we don't need--we
-       * only need Compile/resources from this project and Test/dependency jars
-       * from external projects
+      /**
+       * Create a URLClassLoader object with URLs to all resources used by the
+       * project. The class loader will be used to resolve references made
+       * within the flattened files.
        */
       val projectURLs = (Compile / resourceDirectories).value.map(_.toURI.toURL)
-      val allClasspathURLs = (Compile / fullClasspath).value.map(_.data.toURI.toURL)
+      val allClasspathURLs = (Test / externalDependencyClasspath).value.map(_.data.toURI.toURL)
       val classLoader = new URLClassLoader((projectURLs ++ allClasspathURLs).toArray, null)
 
-      val schemaLocationPattern = """schemaLocation=\"([^\"]*)\"""".r
-      val hrefPattern = "href=\"([^\"]*)\"".r
-      val documentPattern = "document[(]'([^']*)'[)]".r
-      val referenceRegexes = List(schemaLocationPattern, hrefPattern, documentPattern)
+      val referenceRegexes = daffodilFlattenResourceReferencePatterns.value
 
-      val referencedFiles = {
-        // This annotation simply warns if the compiler cannot enable tail call optimization
-        @scala.annotation.tailrec
-        def getReferences(root: URL, parents: Seq[URL], acc: ArrayBuffer[URL]): Seq[URL] = {
-          val rootPath = Paths.get(root.toURI)
-          parents match {
-            // Already processed this file (h), proceed with rest of files (t)
-            case h :: t if (acc.contains(h)) =>
-              getReferences(
-                root,
-                t,
-                acc
-              )
-            // Need to process this file (h)
-            case h :: t => {
-              val relPath = h.toString match {
-                case j if (j.startsWith("jar:")) => Paths.get(j.toString.split("!")(1).tail)
-                case f if (f.startsWith("file:")) => rootPath.relativize(Paths.get(h.toURI))
-              }
-              val bytes = h.openStream().readAllBytes()
-              val newPath = Paths.get(
-                flatDir.toString,
-                relPath.toString.replaceAll("/", "__")
-              )
-              val bw = Files.newBufferedWriter(newPath)
-              val fileAsString = new String(bytes, Charset.defaultCharset())
-              val references = {
-                referenceRegexes.flatMap { re =>
-                  re.findAllIn(fileAsString).matchData.map(_.group(1))
-                }
-              }
-
-              // Resolve the location of all references on the actual file
-              // system
-              val resolvedReferences = references
-                .map { ref =>
-                  val origLocation = {
-                    if (ref.contains("urn:")) {
-                      val urn = ref.split(" ")(1)
-                      if (urn.startsWith("/"))
-                        urn.tail
-                      else
-                        urn
-                    } else if (ref.startsWith("/"))
-                      ref.tail
-                    else
-                      ref
-                  }
-                  val res = {
-                    val r = classLoader.findResource(origLocation)
-                    if (r == null) {
-                      val rrel = List(relPath.getParent, origLocation).mkString("/")
-                      classLoader.findResource(rrel)
-                    } else
-                      r
-                  }
-                  if (res == null)
-                    logger.warn(s"Unable to resolve reference to $ref from source file $h")
-                  ref -> Option(res)
-                }
-                .toMap
-                .filter(e => e._2.isDefined)
-
-              // For each reference do a search and replace of the entire file
-              val updatedFileAsString = {
-                resolvedReferences.foldLeft(fileAsString) {
-                  case (input, (ref, resolvedRef)) => {
-                    // For each reference replace each instance of it in the
-                    // file with the same reference but with "/" changed to "__"
-                    val rref = resolvedRef.get.toString
-                    val relativized = rref match {
-                      case j if (j.startsWith("jar")) => j.split("!")(1).tail
-                      case f if (f.startsWith("file")) => rootPath.relativize(Paths.get(resolvedRef.get.toURI)).toString
-                    }
-                    input.replaceAll(ref, relativized.replaceAll("/", "__"))
-                  }
-                }
-              }
-
-              bw.write(updatedFileAsString)
-              bw.close()
-
-              /* Have succesfully processed this file (h), call getReferences
-               * again on the rest of the list (t) + any references from this
-               * file. Add this file to the accumulator list
-               */
-              getReferences(
-                root,
-                t ++ resolvedReferences.values
-                  .collect { case Some(url) => url }
-                  .filterNot(t.contains),
-                acc += h
-              )
-            }
-            case _ => acc // Have processed all referenced files, return acc
+      val processed = scala.collection.mutable.Set[URI]()
+      projectResources foreach { case (rootURL, urls) =>
+        val unprocessed = scala.collection.mutable.Stack[URI]()
+        val rootURI = rootURL.toURI
+        val rootPath = Paths.get(rootURI)
+        unprocessed.pushAll(urls.map(_.toURI))
+        while (!unprocessed.isEmpty) {
+          val contextURI = unprocessed.pop
+          val bytes = contextURI.toURL.openStream().readAllBytes()
+          val contextRelPath = contextURI.getScheme match {
+            case "jar" => Paths.get(contextURI.toString.split("!")(1).tail)
+            case "file" => Paths.get(rootURI.relativize(contextURI).getPath)
+            case _ => throw new IllegalArgumentException(s"Unrecognized URI scheme: $contextURI")
           }
+          val contextFlatPath = Paths.get(
+            flatDir.toString,
+            contextRelPath.toString.replaceAll("/", "__"))
+          val bw = Files.newBufferedWriter(contextFlatPath)
+          val fileAsString = new String(bytes, Charset.defaultCharset())
+
+          val references = referenceRegexes.flatMap { re =>
+            re.findAllIn(fileAsString).matchData.map(_.group(1))
+          }
+
+          val resolvedRefs = references.map { ref =>
+            val origLocation = if (ref contains " ") ref.split(" ")(1) else ref
+            if (origLocation.startsWith("/")) {
+              // Dealing with an absolute path
+              val url = Option(classLoader.findResource(origLocation.tail))
+              if (url.isDefined)
+                Some(origLocation -> url.get.toURI)
+              else {
+                logger.warn(s"Unable to resolve absolute reference to $ref from source file $contextURI")
+                None
+              }
+            } else {
+              // Relative path
+              val relPath = contextRelPath.resolveSibling(origLocation).normalize()
+              if (Files.exists(rootPath.resolve(relPath))) {
+                // Found the file on the regular filesystem
+                Some(origLocation -> rootURI.resolve(relPath.toString))
+              } else {
+                // Check the classpath for the current reference relative to the
+                // current contextURI
+                val url = Option(classLoader.findResource(relPath.toString))
+                if (url.isDefined)
+                  Some(origLocation -> url.get.toURI)
+                else {
+                  // Maybe this is actually an absolute path not within the same
+                  // context. Check the classpath for the original location
+                  val url2 = Option(classLoader.findResource(origLocation))
+                  if (url2.isDefined)
+                    Some(origLocation -> url2.get.toURI)
+                  else {
+                    logger.warn(s"Unable to resolve local reference to $ref from source file $contextURI")
+                    None
+                  }
+                }
+              }
+            }
+          }.flatten.toMap
+
+          val updatedFileAsString = {
+            resolvedRefs.foldLeft(fileAsString) {
+              case (input, (ref, resolvedRef)) => {
+                // For each reference replace each instance of it in the
+                // file with the same reference but with "/" changed to "__"
+                val relativized = resolvedRef.getScheme match {
+                  case "jar" => resolvedRef.toString.split("!")(1).tail
+                  case _ => rootURI.relativize(resolvedRef).toString
+                }
+                input.replaceAll(ref, relativized.replaceAll("/", "__"))
+              }
+            }
+          }
+
+          bw.write(updatedFileAsString)
+          bw.close()
+          processed += contextURI
+          unprocessed.pushAll((resolvedRefs.values.toSet diff processed).filterNot(unprocessed contains _))
         }
-        val acc = new ArrayBuffer[URL]()
-        projectResources foreach { case (root, files) =>
-          getReferences(root, files, acc)
-        }
-        acc
       }
 
       /* Create zip file containing all flattened schemas */
       val flattenedFiles = IO.listFiles(flatDir)
       val sources = flattenedFiles.map(file => file -> file.getName())
-      IO.zip(sources, daffodilFlattenTarget.value, Some(System.currentTimeMillis()))
+      IO.zip(sources, daffodilFlattenTarget.value, Package.defaultTimestamp)
       logger.info(s"Generated flattened schema package at ${daffodilFlattenTarget.value.toString}")
-      daffodilFlattenTarget.value
+      Seq(daffodilFlattenTarget.value)
+    },
+
+    daffodilFlattenSchemas := {
+      (daffodilFlattenSchemas / products).value.head
     },
 
     artifacts ++= {
