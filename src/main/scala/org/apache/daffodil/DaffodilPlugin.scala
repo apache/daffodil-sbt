@@ -20,7 +20,7 @@ package org.apache.daffodil
 import java.io.File
 import java.net.{ URI, URLClassLoader }
 import java.nio.charset.Charset
-import java.nio.file.{ FileSystemNotFoundException, FileSystems, Files, Paths }
+import java.nio.file.{ FileSystem, FileSystems, Files, Paths }
 import scala.language.implicitConversions
 import scala.util.Properties
 import scala.util.matching.Regex
@@ -916,27 +916,41 @@ object DaffodilPlugin extends AutoPlugin {
       val classLoader = new URLClassLoader((projectURLs ++ allClasspathURLs).toArray, null)
 
       val referenceRegexes = daffodilFlattenResourceReferencePatterns.value
-      val jarRegex = "(.*)!(.*)".r
+      val jarRegex = "(.*/(.*).jar)!(.*)".r
 
       val seen = scala.collection.mutable.Set[URI]()
       val unprocessed = scala.collection.mutable.Stack[URI]()
+      val unresolved = scala.collection.mutable.ArrayBuffer[(URI, String)]()
+      val jarFileSystems = scala.collection.mutable.Map[String, FileSystem]()
       unprocessed.pushAll(projectURLs.map(_.toURI))
       seen ++= projectURLs.map(_.toURI)
       while (!unprocessed.isEmpty) {
         val contextURI = unprocessed.pop
         val bytes = contextURI.toURL.openStream().readAllBytes()
+
+        // Get a Java Path for the current file (whether it is in a JAR or
+        // just a regular file) and a Path for where the current file will be
+        // moved to in the flattened directory structure.  Note that using a
+        // Java Path on a regular file will use the default FileSystem while for
+        // JARs a FileSystem is created for interacting with the files inside
+        // the JAR. This allows all Path functions like resolveSibling/exists to
+        // work with both regular files or files contained inside a JAR.
         val (contextPath, flatPath) = contextURI.getScheme match {
           case "jar" =>
             contextURI.toString match {
-              case jarRegex(jarPath, path) => {
-                val fs = try {
-                  FileSystems.getFileSystem(contextURI)
-                } catch {
-                  case e: FileSystemNotFoundException =>
-                    FileSystems.newFileSystem(contextURI, new java.util.HashMap[String, Any]())
-                }
+              case jarRegex(jarPath, jarName, path) => {
+                val fs = jarFileSystems.getOrElseUpdate(
+                  Paths.get(jarPath).toString,
+                  FileSystems.newFileSystem(contextURI, new java.util.HashMap[String, Any]())
+                )
                 val cPath = fs.getPath(path)
-                (cPath, Paths.get(flatDir.toString, cPath.toString.tail.replaceAll("/", "__")))
+                (
+                  cPath,
+                  Paths.get(
+                    flatDir.toString,
+                    s"${jarName}__${cPath.toString.tail.replaceAll("/", "__")}"
+                  )
+                )
               }
               case _ =>
                 throw new IllegalArgumentException(s"Unable to parse JAR URI: $contextURI")
@@ -944,7 +958,7 @@ object DaffodilPlugin extends AutoPlugin {
           case "file" => {
             val path = Paths.get(contextURI)
             val root = (Compile / resourceDirectories).value
-              .find(file => contextURI.toString.contains(file.toString))
+              .find(dir => contextURI.getPath.startsWith(dir.toString))
               .get
               .toURI
             (
@@ -959,6 +973,10 @@ object DaffodilPlugin extends AutoPlugin {
             throw new IllegalArgumentException(s"Unrecognized URI scheme: $contextURI")
         }
 
+        assert(
+          !Files.exists(flatPath),
+          s"File $flatPath already exists and would be overwritten, aborting!"
+        )
         val bw = Files.newBufferedWriter(flatPath)
         val fileAsString = new String(bytes, Charset.defaultCharset())
 
@@ -966,19 +984,18 @@ object DaffodilPlugin extends AutoPlugin {
           re.findAllIn(fileAsString).matchData.map(_.group(1))
         }
 
-        val resolvedRefs = references.map { ref =>
-          if (ref.startsWith("/")) {
+        val resolvedRefs = references.flatMap { ref =>
+          val optResolved = if (ref.startsWith("/")) {
             // Dealing with an absolute path
-            ref -> Option(classLoader.findResource(ref.tail))
+            Option(classLoader.findResource(ref.tail))
           } else {
             // Relative path
             val refPath = contextPath.resolveSibling(ref).normalize()
             if (Files.exists(refPath)) {
               // Referenced path exists in either the same root resource
               // diretory or jar file as the context schema
-              ref -> Some(refPath.toUri.toURL)
+              Some(refPath.toUri.toURL)
             } else {
-              ref -> None
               contextURI.getScheme match {
                 case "file" => {
                   // Need to check other resource directories
@@ -986,34 +1003,44 @@ object DaffodilPlugin extends AutoPlugin {
                     Files.exists(Paths.get(root.toURI.resolve(ref)))
                   )
                   if (resolvedRoot.isDefined)
-                    ref -> Some(resolvedRoot.get.toURI.resolve(ref).toURL)
+                    Some(resolvedRoot.get.toURI.resolve(ref).toURL)
                   else {
                     // Maybe this path is actually absolute, just missing the
                     // leading '/', check the classpath
-                    ref -> Option(classLoader.findResource(ref))
+                    Option(classLoader.findResource(ref))
                   }
                 }
-                case _ => ref -> None
+                case "jar" => {
+                  // Maybe this path in the JAR is actually absolute, just
+                  // missing the leading '/', try resolving it relative to the
+                  // root of the JAR
+                  val jarPath = contextPath.getRoot().resolve(ref)
+                  if (Files.exists(jarPath))
+                    Some(jarPath.toUri.toURL)
+                  else
+                    None
+                }
+                case _ => None
               }
             }
           }
+          if (optResolved.isEmpty)
+            unresolved.append((contextURI, ref))
+          optResolved.map(resolved => ref -> resolved)
         }.toMap
 
-        // Warn about unresolved references
-        resolvedRefs.filter(_._2 == None).map { case (ref, _) =>
-          logger.warn(s"Unable to resolve reference to $ref from source file $contextURI")
-        }
-
-        val fullyResolved = resolvedRefs.filter(_._2 != None)
-
         val updatedFileAsString = {
-          fullyResolved.foldLeft(fileAsString) {
+          resolvedRefs.foldLeft(fileAsString) {
             case (input, (ref, optResolvedURL)) => {
               // For each reference replace each instance of it in the
               // file with the same reference but with "/" changed to "__"
-              val resolvedURI = optResolvedURL.get.toURI
+              val resolvedURI = optResolvedURL.toURI
               val relativized = resolvedURI.getScheme match {
-                case "jar" => resolvedURI.toString.split("!")(1).tail
+                case "jar" =>
+                  resolvedURI.toString match {
+                    case jarRegex(_, jarName, path) =>
+                      s"${jarName}__${path.tail.replaceAll("/", "__")}"
+                  }
                 case _ => {
                   val resolvedRoot = (Compile / resourceDirectories).value.find(root =>
                     resolvedURI.toString.contains(root.toString)
@@ -1028,10 +1055,20 @@ object DaffodilPlugin extends AutoPlugin {
 
         bw.write(updatedFileAsString)
         bw.close()
-        seen += contextURI
-        val unseen = fullyResolved.values.map(_.get.toURI).filterNot(seen)
+        val unseen = resolvedRefs.values.map(_.toURI).filter(seen.add(_))
         unprocessed.pushAll(unseen)
       }
+
+      // Close any open JAR FileSystems
+      jarFileSystems.values.foreach(_.close())
+
+      // Error unresolved references
+      unresolved.foreach { case (context, ref) =>
+        logger.error(s"Unable to resolve reference to $ref from source file $context")
+      }
+
+      // Error out if we have any unresolved references
+      assert(unresolved.isEmpty)
 
       /* Create zip file containing all flattened schemas */
       val flattenedFiles = IO.listFiles(flatDir).sorted
