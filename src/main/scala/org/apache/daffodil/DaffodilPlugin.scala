@@ -1034,7 +1034,7 @@ object DaffodilPlugin extends AutoPlugin {
       }
 
       /* Create zip file containing all flattened schemas */
-      val flattenedFiles = IO.listFiles(flatDir)
+      val flattenedFiles = IO.listFiles(flatDir).sorted
       val sources = flattenedFiles.map(file => file -> file.getName())
       IO.zip(sources, daffodilFlattenTarget.value, Package.defaultTimestamp)
       logger.info(
