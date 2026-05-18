@@ -17,14 +17,13 @@
 
 package org.apache.daffodil
 
-import scala.util.matching.Regex
-
 import java.io.File
 import java.net.{ URI, URLClassLoader }
 import java.nio.charset.Charset
-import java.nio.file.{ Files, Paths }
+import java.nio.file.{ FileSystemNotFoundException, FileSystems, Files, Paths }
 import scala.language.implicitConversions
 import scala.util.Properties
+import scala.util.matching.Regex
 
 import sbt.Keys._
 import sbt._
@@ -77,6 +76,7 @@ object DaffodilPlugin extends AutoPlugin {
     val daffodilFlattenResourceReferencePatterns = settingKey[Seq[Regex]](
       """Sequence of patterns that will match resource references, ie 'schemaLocation="/org/apache/..."'. Note that the pattern must capture the reference in the first capture group"""
     )
+
     /**
      * Class to define daffodilPackageBinInfos, auto-imported to simplify sbt configs
      */
@@ -887,123 +887,159 @@ object DaffodilPlugin extends AutoPlugin {
     daffodilFlattenSchemas / excludeFilter := HiddenFileFilter,
 
     daffodilFlattenResourceReferencePatterns := List(
-        """schemaLocation=\"([^\"]*)\"""".r,
-        "href=\"([^\"]*)\"".r,
-        "document[(]'([^']*)'[)]".r),
+      """(?<!xsi:)schemaLocation=\"([^\"]*)\"""".r,
+      "href=\"([^\"]*)\"".r,
+      "document[(]'([^']*)'[)]".r
+    ),
 
     daffodilFlattenSchemas / products := {
 
       val logger = streams.value.log
-      val filter = (daffodilFlattenSchemas / includeFilter).value -- (daffodilFlattenSchemas / excludeFilter).value
+      val filter =
+        (daffodilFlattenSchemas / includeFilter).value -- (daffodilFlattenSchemas / excludeFilter).value
 
       val flatDir = target.value / "flatDir"
       if (flatDir.exists())
         IO.delete(flatDir)
       IO.createDirectory(flatDir)
 
-      val projectResources = (Compile / resourceDirectories).value
-        .map { root => root.toURI.toURL -> (root ** filter).get.map(_.toURI.toURL).toList }
-        .toMap
+      val projectURLs = (Compile / resourceDirectories).value.map { root =>
+        (root ** filter).get.map(_.toURI.toURL).toList
+      }.flatten
 
       /**
        * Create a URLClassLoader object with URLs to all resources used by the
        * project. The class loader will be used to resolve references made
        * within the flattened files.
        */
-      val projectURLs = (Compile / resourceDirectories).value.map(_.toURI.toURL)
       val allClasspathURLs = (Test / externalDependencyClasspath).value.map(_.data.toURI.toURL)
       val classLoader = new URLClassLoader((projectURLs ++ allClasspathURLs).toArray, null)
 
       val referenceRegexes = daffodilFlattenResourceReferencePatterns.value
+      val jarRegex = "(.*)!(.*)".r
 
-      val processed = scala.collection.mutable.Set[URI]()
-      projectResources foreach { case (rootURL, urls) =>
-        val unprocessed = scala.collection.mutable.Stack[URI]()
-        val rootURI = rootURL.toURI
-        val rootPath = Paths.get(rootURI)
-        unprocessed.pushAll(urls.map(_.toURI))
-        while (!unprocessed.isEmpty) {
-          val contextURI = unprocessed.pop
-          val bytes = contextURI.toURL.openStream().readAllBytes()
-          val contextRelPath = contextURI.getScheme match {
-            case "jar" => Paths.get(contextURI.toString.split("!")(1).tail)
-            case "file" => Paths.get(rootURI.relativize(contextURI).getPath)
-            case _ => throw new IllegalArgumentException(s"Unrecognized URI scheme: $contextURI")
-          }
-          val contextFlatPath = Paths.get(
-            flatDir.toString,
-            contextRelPath.toString.replaceAll("/", "__"))
-          val bw = Files.newBufferedWriter(contextFlatPath)
-          val fileAsString = new String(bytes, Charset.defaultCharset())
-
-          val references = referenceRegexes.flatMap { re =>
-            re.findAllIn(fileAsString).matchData.map(_.group(1))
-          }
-
-          val resolvedRefs = references.map { ref =>
-            val origLocation = if (ref contains " ") ref.split(" ")(1) else ref
-            if (origLocation.startsWith("/")) {
-              // Dealing with an absolute path
-              val url = Option(classLoader.findResource(origLocation.tail))
-              if (url.isDefined)
-                Some(origLocation -> url.get.toURI)
-              else {
-                logger.warn(s"Unable to resolve absolute reference to $ref from source file $contextURI")
-                None
+      val seen = scala.collection.mutable.Set[URI]()
+      val unprocessed = scala.collection.mutable.Stack[URI]()
+      unprocessed.pushAll(projectURLs.map(_.toURI))
+      seen ++= projectURLs.map(_.toURI)
+      while (!unprocessed.isEmpty) {
+        val contextURI = unprocessed.pop
+        val bytes = contextURI.toURL.openStream().readAllBytes()
+        val (contextPath, flatPath) = contextURI.getScheme match {
+          case "jar" =>
+            contextURI.toString match {
+              case jarRegex(jarPath, path) => {
+                val fs = try {
+                  FileSystems.getFileSystem(contextURI)
+                } catch {
+                  case e: FileSystemNotFoundException =>
+                    FileSystems.newFileSystem(contextURI, new java.util.HashMap[String, Any]())
+                }
+                val cPath = fs.getPath(path)
+                (cPath, Paths.get(flatDir.toString, cPath.toString.tail.replaceAll("/", "__")))
               }
+              case _ =>
+                throw new IllegalArgumentException(s"Unable to parse JAR URI: $contextURI")
+            }
+          case "file" => {
+            val path = Paths.get(contextURI)
+            val root = (Compile / resourceDirectories).value
+              .find(file => contextURI.toString.contains(file.toString))
+              .get
+              .toURI
+            (
+              path,
+              Paths.get(
+                flatDir.toString,
+                Paths.get(root).relativize(path).toString.replaceAll("/", "__")
+              )
+            )
+          }
+          case _ =>
+            throw new IllegalArgumentException(s"Unrecognized URI scheme: $contextURI")
+        }
+
+        val bw = Files.newBufferedWriter(flatPath)
+        val fileAsString = new String(bytes, Charset.defaultCharset())
+
+        val references = referenceRegexes.flatMap { re =>
+          re.findAllIn(fileAsString).matchData.map(_.group(1))
+        }
+
+        val resolvedRefs = references.map { ref =>
+          if (ref.startsWith("/")) {
+            // Dealing with an absolute path
+            ref -> Option(classLoader.findResource(ref.tail))
+          } else {
+            // Relative path
+            val refPath = contextPath.resolveSibling(ref).normalize()
+            if (Files.exists(refPath)) {
+              // Referenced path exists in either the same root resource
+              // diretory or jar file as the context schema
+              ref -> Some(refPath.toUri.toURL)
             } else {
-              // Relative path
-              val relPath = contextRelPath.resolveSibling(origLocation).normalize()
-              if (Files.exists(rootPath.resolve(relPath))) {
-                // Found the file on the regular filesystem
-                Some(origLocation -> rootURI.resolve(relPath.toString))
-              } else {
-                // Check the classpath for the current reference relative to the
-                // current contextURI
-                val url = Option(classLoader.findResource(relPath.toString))
-                if (url.isDefined)
-                  Some(origLocation -> url.get.toURI)
-                else {
-                  // Maybe this is actually an absolute path not within the same
-                  // context. Check the classpath for the original location
-                  val url2 = Option(classLoader.findResource(origLocation))
-                  if (url2.isDefined)
-                    Some(origLocation -> url2.get.toURI)
+              ref -> None
+              contextURI.getScheme match {
+                case "file" => {
+                  // Need to check other resource directories
+                  val resolvedRoot = (Compile / resourceDirectories).value.find(root =>
+                    Files.exists(Paths.get(root.toURI.resolve(ref)))
+                  )
+                  if (resolvedRoot.isDefined)
+                    ref -> Some(resolvedRoot.get.toURI.resolve(ref).toURL)
                   else {
-                    logger.warn(s"Unable to resolve local reference to $ref from source file $contextURI")
-                    None
+                    // Maybe this path is actually absolute, just missing the
+                    // leading '/', check the classpath
+                    ref -> Option(classLoader.findResource(ref))
                   }
                 }
-              }
-            }
-          }.flatten.toMap
-
-          val updatedFileAsString = {
-            resolvedRefs.foldLeft(fileAsString) {
-              case (input, (ref, resolvedRef)) => {
-                // For each reference replace each instance of it in the
-                // file with the same reference but with "/" changed to "__"
-                val relativized = resolvedRef.getScheme match {
-                  case "jar" => resolvedRef.toString.split("!")(1).tail
-                  case _ => rootURI.relativize(resolvedRef).toString
-                }
-                input.replaceAll(ref, relativized.replaceAll("/", "__"))
+                case _ => ref -> None
               }
             }
           }
+        }.toMap
 
-          bw.write(updatedFileAsString)
-          bw.close()
-          processed += contextURI
-          unprocessed.pushAll((resolvedRefs.values.toSet diff processed).filterNot(unprocessed contains _))
+        // Warn about unresolved references
+        resolvedRefs.filter(_._2 == None).map { case (ref, _) =>
+          logger.warn(s"Unable to resolve reference to $ref from source file $contextURI")
         }
+
+        val fullyResolved = resolvedRefs.filter(_._2 != None)
+
+        val updatedFileAsString = {
+          fullyResolved.foldLeft(fileAsString) {
+            case (input, (ref, optResolvedURL)) => {
+              // For each reference replace each instance of it in the
+              // file with the same reference but with "/" changed to "__"
+              val resolvedURI = optResolvedURL.get.toURI
+              val relativized = resolvedURI.getScheme match {
+                case "jar" => resolvedURI.toString.split("!")(1).tail
+                case _ => {
+                  val resolvedRoot = (Compile / resourceDirectories).value.find(root =>
+                    resolvedURI.toString.contains(root.toString)
+                  )
+                  resolvedRoot.get.toURI.relativize(resolvedURI).toString
+                }
+              }
+              input.replaceAll(ref, relativized.replaceAll("/", "__"))
+            }
+          }
+        }
+
+        bw.write(updatedFileAsString)
+        bw.close()
+        seen += contextURI
+        val unseen = fullyResolved.values.map(_.get.toURI).filterNot(seen)
+        unprocessed.pushAll(unseen)
       }
 
       /* Create zip file containing all flattened schemas */
       val flattenedFiles = IO.listFiles(flatDir)
       val sources = flattenedFiles.map(file => file -> file.getName())
       IO.zip(sources, daffodilFlattenTarget.value, Package.defaultTimestamp)
-      logger.info(s"Generated flattened schema package at ${daffodilFlattenTarget.value.toString}")
+      logger.info(
+        s"Generated flattened schema package at ${daffodilFlattenTarget.value.toString}"
+      )
       Seq(daffodilFlattenTarget.value)
     },
 
