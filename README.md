@@ -325,6 +325,15 @@ and resource files are anything else.
 
 ### Flatten Schemas
 
+Many non-Daffodil XML/XSD programs (such as XML validators) do not resolve
+schemaLocation's in the same way that Daffodil does and will often stuggle to
+find schemas that aren't in the same directory as the root schema. By flattening
+the directory structure at a common root (ie the directory containing 'com/'
+and/or 'org/' we can rename all of the schemas while avoiding any conflicts in
+schema name for generically named schemas, like 'baseFormat.dfdl.xsd'. Having
+all of the schemas and schemaLocation's renamed should allow tools with less
+robust schemaLocation resolvers to just work.
+
 This plugin has functionality to flatten the directory structure of 1 or more
 schema projects, renaming the schema files and upating schemaLocation's as
 necessary.
@@ -343,15 +352,6 @@ will be renamed to:
 
 Note: Original files are not modified, they are simply copied to the specified
 output directory with the new name and updated schemaLocation's.
-
-Many non-Daffodil XML/XSD programs (such as XML validators) do not resolve
-scheamLocations in the same way that Daffodil does and will often stuggle to
-find schemas that aren't in the same directory as the root schema. By flattening
-the directory structure at a common root (ie the directory containing 'com/'
-and/or 'org/' we can rename all of the schemas while avoiding any conflicts in
-schema name for generically named schemas, like 'baseFormat.dfdl.xsd'. Having
-all of the schemas and schemaLocation's renamed should allow tools with less
-robust schemaLocation resolvers to just work.
 
 ### Cross-Building
 
