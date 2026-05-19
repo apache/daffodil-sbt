@@ -1004,20 +1004,22 @@ object DaffodilPlugin extends AutoPlugin {
               // diretory or jar file as the context schema
               Some(refPath.toUri.toURL)
             } else {
-              val contextRoot = getRootPath(contextURI)
-              val relPath = contextRoot.relativize(refPath)
               val optResolvedRelative = contextURI.getScheme match {
                 case "file" => {
                   // Need to check other resource directories
+                  val contextRoot = getRootPath(contextURI)
+                  val relPath = contextRoot.relativize(refPath)
                   val resolvedRoot = (Compile / resourceDirectories).value.find(root =>
                     Files.exists(root.toPath.resolve(relPath))
                   )
-                  resolvedRoot.map(_.toURI.resolve(ref).toURL)
+                  resolvedRoot.map(_.toPath.resolve(relPath).toUri.toURL)
                 }
                 case "jar" =>
                   // Nothing else to check, resolveSibling should have found it in the same jar
                   None
               }
+              // The orElse call is to support the deprecated behavior of
+              // resolving relative paths asif they were absolute
               optResolvedRelative.orElse(Option(classLoader.findResource(ref)))
             }
           }
@@ -1039,10 +1041,8 @@ object DaffodilPlugin extends AutoPlugin {
                       s"$jarName/${path.tail}"
                   }
                 case _ => {
-                  val resolvedRoot = (Compile / resourceDirectories).value.find(root =>
-                    resolvedURI.getPath.startsWith(root.toString)
-                  )
-                  resolvedRoot.get.toURI.relativize(resolvedURI).toString
+                  val resolvedRoot = getRootPath(contextURI)
+                  resolvedRoot.relativize(Paths.get(resolvedURI)).toString
                 }
               }
               input.replaceAll(ref, relativized.replaceAll("/", "__"))
@@ -1066,7 +1066,9 @@ object DaffodilPlugin extends AutoPlugin {
 
       // Error out if we have any unresolved references
       if (!unresolved.isEmpty)
-        throw new MessageOnlyException("Unable to resolve one or more references while flattening")
+        throw new MessageOnlyException(
+          "Unable to resolve one or more references while flattening"
+        )
 
       /* Create zip file containing all flattened schemas */
       val flattenedFiles = IO.listFiles(flatDir).sorted
