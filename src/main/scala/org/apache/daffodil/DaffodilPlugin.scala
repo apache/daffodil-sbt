@@ -918,6 +918,17 @@ object DaffodilPlugin extends AutoPlugin {
       val referenceRegexes = daffodilFlattenResourceReferencePatterns.value
       val jarRegex = "(.*/(.*).jar)!(.*)".r
 
+      def getRootPath(path: URI) = {
+        path.getScheme match {
+          case "file" => {
+            (Compile / resourceDirectories).value
+              .find(dir => path.getPath.startsWith(dir.toString))
+              .get
+              .toPath
+          }
+        }
+      }
+
       val seen = scala.collection.mutable.Set[URI]()
       val unprocessed = scala.collection.mutable.Stack[URI]()
       val unresolved = scala.collection.mutable.ArrayBuffer[(URI, String)]()
@@ -957,15 +968,12 @@ object DaffodilPlugin extends AutoPlugin {
             }
           case "file" => {
             val path = Paths.get(contextURI)
-            val root = (Compile / resourceDirectories).value
-              .find(dir => contextURI.getPath.startsWith(dir.toString))
-              .get
-              .toURI
+            val root = getRootPath(contextURI)
             (
               path,
               Paths.get(
                 flatDir.toString,
-                Paths.get(root).relativize(path).toString.replaceAll("/", "__")
+                root.relativize(path).toString.replaceAll("/", "__")
               )
             )
           }
@@ -996,32 +1004,21 @@ object DaffodilPlugin extends AutoPlugin {
               // diretory or jar file as the context schema
               Some(refPath.toUri.toURL)
             } else {
-              contextURI.getScheme match {
+              val contextRoot = getRootPath(contextURI)
+              val relPath = contextRoot.relativize(refPath)
+              val optResolvedRelative = contextURI.getScheme match {
                 case "file" => {
                   // Need to check other resource directories
                   val resolvedRoot = (Compile / resourceDirectories).value.find(root =>
-                    Files.exists(Paths.get(root.toURI.resolve(ref)))
+                    Files.exists(root.toPath.resolve(relPath))
                   )
-                  if (resolvedRoot.isDefined)
-                    Some(resolvedRoot.get.toURI.resolve(ref).toURL)
-                  else {
-                    // Maybe this path is actually absolute, just missing the
-                    // leading '/', check the classpath
-                    Option(classLoader.findResource(ref))
-                  }
+                  resolvedRoot.map(_.toURI.resolve(ref).toURL)
                 }
-                case "jar" => {
-                  // Maybe this path in the JAR is actually absolute, just
-                  // missing the leading '/', try resolving it relative to the
-                  // root of the JAR
-                  val jarPath = contextPath.getRoot().resolve(ref)
-                  if (Files.exists(jarPath))
-                    Some(jarPath.toUri.toURL)
-                  else
-                    None
-                }
-                case _ => None
+                case "jar" =>
+                  // Nothing else to check, resolveSibling should have found it in the same jar
+                  None
               }
+              optResolvedRelative.orElse(Option(classLoader.findResource(ref)))
             }
           }
           if (optResolved.isEmpty)
@@ -1039,11 +1036,11 @@ object DaffodilPlugin extends AutoPlugin {
                 case "jar" =>
                   resolvedURI.toString match {
                     case jarRegex(_, jarName, path) =>
-                      s"${jarName}__${path.tail.replaceAll("/", "__")}"
+                      s"$jarName/${path.tail}"
                   }
                 case _ => {
                   val resolvedRoot = (Compile / resourceDirectories).value.find(root =>
-                    resolvedURI.toString.contains(root.toString)
+                    resolvedURI.getPath.startsWith(root.toString)
                   )
                   resolvedRoot.get.toURI.relativize(resolvedURI).toString
                 }
@@ -1068,7 +1065,8 @@ object DaffodilPlugin extends AutoPlugin {
       }
 
       // Error out if we have any unresolved references
-      assert(unresolved.isEmpty)
+      if (!unresolved.isEmpty)
+        throw new MessageOnlyException("Unable to resolve one or more references while flattening")
 
       /* Create zip file containing all flattened schemas */
       val flattenedFiles = IO.listFiles(flatDir).sorted
