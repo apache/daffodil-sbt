@@ -411,6 +411,13 @@ object DaffodilPlugin extends AutoPlugin {
         Seq()
       }
     },
+    /**
+     * Preserve Java parameter names in bytecode for reflection.
+     * This needed to support custom Daffodil Layers written in Java.
+     * Otherwise, Java setters appear with parameters named arg0/arg1/...
+     * and cannot be matched to schema variables.
+     */
+    javacOptions += "-parameters",
 
     /**
      * See javacOptions above for details
