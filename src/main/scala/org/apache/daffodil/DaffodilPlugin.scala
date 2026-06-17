@@ -622,7 +622,7 @@ object DaffodilPlugin extends AutoPlugin {
      * If false, flattened schemas will not be created unless you explicitly run the
      * daffodilFlattenSchemas.
      */
-    daffodilFlattenSchemas / publishArtifact := true,
+    daffodilFlattenSchemas / publishArtifact := false,
 
     daffodilFlattenSchemas / artifact := Artifact(
       name.value,
