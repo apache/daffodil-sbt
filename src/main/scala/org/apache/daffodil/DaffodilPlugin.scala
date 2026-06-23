@@ -258,18 +258,13 @@ object DaffodilPlugin extends AutoPlugin {
      * to the working version, which may limit JDK support.
      */
     scalaVersion := {
-      // We really only need Scala versions and not full ModuleIds, but using ModuleId.revision
-      // makes it easier for scala-steward to detect and automatically update the versions when
-      // new Scala patch versions are released.
-      //
-      // Note that if we update one of the below scala-library versions, we should verify that
-      // official Daffodil releases using older versions of scala-library can still reload saved
-      // parsers built with this newer scalaVersion (see above note about serialization
-      // compatibility). See the versions-01 scripted test to how to manually verify this.
+      // Scala versions are defined in project/DaffodilScalaVersions.scala so that
+      // scala-steward can detect and update them. A sourceGenerators task in build.sbt
+      // embeds those version strings into DaffodilScalaVersions at compile time.
       val daffodilToScalaVersion = Map(
-        ">=4.0.0 " -> ("org.scala-lang" % "scala3-library" % "3.3.7").revision,
-        "=3.11.0 " -> ("org.scala-lang" % "scala-library" % "2.13.16").revision, // scala-steward:off
-        "<=3.10.0" -> ("org.scala-lang" % "scala-library" % "2.12.21").revision
+        ">=4.0.0 " -> DaffodilScalaVersions.scala3,
+        "=3.11.0 " -> DaffodilScalaVersions.scala213Pinned,
+        "<=3.10.0" -> DaffodilScalaVersions.scala212
       )
       filterVersions(daffodilVersion.value, daffodilToScalaVersion).head
     },
