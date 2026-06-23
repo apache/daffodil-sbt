@@ -71,6 +71,26 @@ lazy val plugin = (project in file("."))
       (Test / test).value
     },
 
+    // Generate a DaffodilScalaVersions.scala source file from the values defined in
+    // project/DaffodilScalaVersions.scala so that scala-steward can update those versions
+    // and the plugin picks them up at build time.
+    Compile / sourceGenerators += Def.task {
+      val outFile =
+        (Compile / sourceManaged).value / "org" / "apache" / "daffodil" / "DaffodilScalaVersions.scala"
+      IO.write(
+        outFile,
+        s"""package org.apache.daffodil
+           |
+           |private[daffodil] object DaffodilScalaVersions {
+           |  val scala3 = "${DaffodilScalaVersions.scala3}"
+           |  val scala213Pinned = "${DaffodilScalaVersions.scala213Pinned}"
+           |  val scala212 = "${DaffodilScalaVersions.scala212}"
+           |}
+           |""".stripMargin
+      )
+      Seq(outFile)
+    }.taskValue,
+
     // Rat check settings
     ratExcludes := Seq(
       file(".git"),
