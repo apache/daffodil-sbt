@@ -92,11 +92,23 @@ jobs:
       - name: Compile
         run: $SBT compile
 
+      - name: Set temp dir
+        if: runner.os == 'Windows'
+        run: mkdir D:\tmp
+        shell: cmd
+
       ############################################################
       # Check
       ############################################################
 
-      - name: Run Tests
+      - name: Run Tests (Windows)
+        if: runner.os == 'Windows'
+        env:
+          JAVA_TOOL_OPTIONS: -Djava.io.tmpdir=D:\tmp
+        run: $SBT test
+
+      - name: Run Tests (macOS/Linux)
+        if: runner.os != 'Windows'
         run: $SBT test
 
   # Lint checks that do not require compilation
