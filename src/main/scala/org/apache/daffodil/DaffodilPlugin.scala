@@ -277,7 +277,7 @@ object DaffodilPlugin extends AutoPlugin {
     /**
      * Default Daffodil version
      */
-    daffodilVersion := "4.1.0",
+    daffodilVersion := "4.2.0",
 
     /**
      * Disable uncommon features by default, schema projects must explicitly enable them to use
