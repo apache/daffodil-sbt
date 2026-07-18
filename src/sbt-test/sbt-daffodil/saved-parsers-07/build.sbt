@@ -21,7 +21,7 @@ val test = (project in file("."))
     name := "test",
     organization := "com.example",
     Test / daffodilPackageBinInfos := Seq(
-      DaffodilBinInfo("/test.dfdl.xsd"),
+      DaffodilBinInfo("/test.dfdl.xsd")
     ),
     daffodilVersion := "4.1.0"
   )
