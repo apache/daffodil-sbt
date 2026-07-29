@@ -54,6 +54,9 @@ lazy val plugin = (project in file("."))
     crossSbtVersions := Seq("1.8.0"),
     scriptedLaunchOpts ++= Seq(
       "-Xmx1024M",
+      // set explicitly (rather than relying on the JVM default) so that the saved-parsers-08
+      // scripted test can verify packageDaffodilBin/javaOptions inherits it
+      "-Xss4m",
       "-Dplugin.version=" + version.value
     ),
     scriptedDependencies := {

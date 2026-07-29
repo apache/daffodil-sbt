@@ -176,6 +176,13 @@ provide to the JVM used to save parsers. For example:
 packageDaffodilBin / javaOptions ++= Seq("-Xmx8G", "-Xss4m")
 ```
 
+Note that saved parsers are built by a forked JVM process, so it does not
+automatically use the memory or stack size options that sbt itself was
+started with (e.g. via `.sbtopts` or `.jvmopts`), with one exception: the
+forked process defaults to using the same `-Xss` (stack size) that sbt was
+started with, if one was provided. This can still be overridden per
+project as shown above.
+
 In some cases it may be useful to enable more verbose logging when building a
 saved parser. To configure the log level, add the following to build.sbt:
 

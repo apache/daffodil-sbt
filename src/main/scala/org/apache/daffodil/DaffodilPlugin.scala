@@ -518,14 +518,30 @@ object DaffodilPlugin extends AutoPlugin {
     /**
      * JVM options used for the forked process to build saved parsers
      *
-     * Defaults to just setting various system properties to configure loggers that might be
-     * used by different daffodil versions
+     * Defaults to setting various system properties to configure loggers that might be used by
+     * different daffodil versions, plus the -Xss this sbt JVM was started with, if any. Since
+     * sbt users often already tune sbt's own stack size (e.g. via .sbtopts or .jvmopts),
+     * it's convenient to reuse that value for the forked process rather than requiring it to
+     * be configured again. If a project wants a different stack size just for this forked
+     * process, it can append its own -Xss, e.g.:
+     *
+     *   packageDaffodilBin / javaOptions += "-Xss64m"
+     *
+     * Note this relies on the JVM using the last of multiple -Xss arguments it is given, so an
+     * appended -Xss here correctly takes precedence over the inherited one below.
      */
-    packageDaffodilBin / javaOptions := Seq(
-      s"-Dorg.slf4j.simpleLogger.logFile=System.out",
-      s"-Dorg.slf4j.simpleLogger.defaultLogLevel=${(packageDaffodilBin / logLevel).value}",
-      s"-Dorg.apache.logging.log4j.level=${(packageDaffodilBin / logLevel).value}"
-    ),
+    packageDaffodilBin / javaOptions := {
+      val inheritedXss =
+        java.lang.management.ManagementFactory.getRuntimeMXBean.getInputArguments
+          .toArray(Array.empty[String])
+          .find(_.startsWith("-Xss"))
+
+      Seq(
+        s"-Dorg.slf4j.simpleLogger.logFile=System.out",
+        s"-Dorg.slf4j.simpleLogger.defaultLogLevel=${(packageDaffodilBin / logLevel).value}",
+        s"-Dorg.apache.logging.log4j.level=${(packageDaffodilBin / logLevel).value}"
+      ) ++ inheritedXss
+    },
 
     /**
      * These two settings tell sbt about the packageDaffodilBin artifacts and the task that
