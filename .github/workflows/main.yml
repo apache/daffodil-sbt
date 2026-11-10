@@ -42,10 +42,10 @@ jobs:
         java_distribution: [ temurin ]
         java_version: [ 17, 21 ]
         scala_version: [ 2.12.18 ]
-        os: [ ubuntu-22.04, windows-2022, macos-14 ]
+        os: [ ubuntu-22.04, windows-2022, macos-15 ]
         exclude:
           # only run macos on java 17
-          - os: macos-14
+          - os: macos-15
             java_version: 21
         include:
           - shell: bash
