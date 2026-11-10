@@ -176,6 +176,13 @@ provide to the JVM used to save parsers. For example:
 packageDaffodilBin / javaOptions ++= Seq("-Xmx8G", "-Xss4m")
 ```
 
+Options set in the unscoped `javaOptions` setting are also included, so options
+needed by all forked tasks can be set once:
+
+```scala
+javaOptions ++= Seq("-Xmx8G", "-Xss4m")
+```
+
 In some cases it may be useful to enable more verbose logging when building a
 saved parser. To configure the log level, add the following to build.sbt:
 

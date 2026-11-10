@@ -518,10 +518,11 @@ object DaffodilPlugin extends AutoPlugin {
     /**
      * JVM options used for the forked process to build saved parsers
      *
-     * Defaults to just setting various system properties to configure loggers that might be
-     * used by different daffodil versions
+     * Appends to the unscoped javaOptions setting, so options defined there are also used here.
+     * Also adds various system properties to configure loggers that might be used by different
+     * daffodil versions
      */
-    packageDaffodilBin / javaOptions := Seq(
+    packageDaffodilBin / javaOptions ++= Seq(
       s"-Dorg.slf4j.simpleLogger.logFile=System.out",
       s"-Dorg.slf4j.simpleLogger.defaultLogLevel=${(packageDaffodilBin / logLevel).value}",
       s"-Dorg.apache.logging.log4j.level=${(packageDaffodilBin / logLevel).value}"
