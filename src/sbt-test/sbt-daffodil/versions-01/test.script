@@ -30,9 +30,16 @@
 # newer Scala versions do not cause issues, but the schema used is designed to
 # detect known serialization issues.
 
+> set daffodilVersion := "4.2.0"
+> packageDaffodilBin
+> test
+# $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/4.2.0/bin/apache-daffodil-4.2.0-bin.tgz -O --output-dir target/
+# $ exec tar -xvf target/apache-daffodil-4.2.0-bin.tgz -C target/
+# $ exec target/apache-daffodil-4.2.0-bin/bin/daffodil parse -P target/test-0.1-daffodil420.bin src/test/resources/com/example/input.txt
+> clean
+
 > set daffodilVersion := "4.1.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil410.bin
 > test
 # $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/4.1.0/bin/apache-daffodil-4.1.0-bin.tgz -O --output-dir target/
 # $ exec tar -xvf target/apache-daffodil-4.1.0-bin.tgz -C target/
@@ -49,7 +56,6 @@ $ exists target/test-0.1-daffodil410.bin
 
 > set daffodilVersion := "3.11.0"
 > packageDaffodilBin
-$ exists target/test-0.1-daffodil3110.bin
 > test
 # $ exec curl -L https://www.apache.org/dyn/closer.lua/download/daffodil/3.11.0/bin/apache-daffodil-3.11.0-bin.tgz -O --output-dir target/
 # $ exec tar -xvf target/apache-daffodil-3.11.0-bin.tgz -C target/
