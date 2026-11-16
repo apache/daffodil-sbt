@@ -351,11 +351,38 @@ sbt daffodilFlattenSchemas
 
 The renaming works as follows:
 
-`org/apache/daffodil/xsd/main.dfdl.xsd`
+Every file is renamed to `<serial_no>_<file_name>`, where `serial_no` is a two
+digit number based on the directory the file was found in. All of the
+directories that contain files being flattened are sorted alphabetically and
+numbered, starting with `01`, so every file from the same directory gets the
+same serial number. Files that come from a dependency JAR are grouped with the
+other files in the same directory of that JAR. If there are more than 99
+directories then the serial numbers use more than two digits so that they all
+have the same width.
 
-will be renamed to:
+For example, if schemas are found in the root of the resource directories, in
+`com/example/format`, and in `org/apache/test`, those directories are numbered
+as:
 
-`org__apache__daffodil__xsd__main.dfdl.xsd`
+| Directory | Serial Number |
+| --- | --- |
+| (root of the resource directories) | `01` |
+| `com/example/format` | `02` |
+| `org/apache/test` | `03` |
+
+and so `org/apache/test/main.dfdl.xsd` is renamed to:
+
+`03_main.dfdl.xsd`
+
+The file name is truncated, keeping its extension, if the new file name
+(including the serial number and extension) would be more than 64 characters.
+For example, this file in `com/example/format`:
+
+`a_schema_file_name_that_is_longer_than_sixty_four_characters_total.dfdl.xsd`
+
+is renamed to:
+
+`02_a_schema_file_name_that_is_longer_than_sixty_four_ch.dfdl.xsd`
 
 Note: Original files are not modified, they are simply copied to the specified
 output directory with the new name and updated schemaLocation's.
