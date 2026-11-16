@@ -20,7 +20,8 @@ package org.apache.daffodil
 import java.io.File
 import java.net.{ URI, URL, URLClassLoader }
 import java.nio.charset.Charset
-import java.nio.file.{ FileSystem, FileSystems, Files, Paths }
+import java.nio.file.{ FileSystem, FileSystems, Files, Path, Paths }
+import java.util.regex.Matcher
 import scala.language.implicitConversions
 import scala.util.Properties
 import scala.util.matching.Regex
@@ -698,6 +699,77 @@ object DaffodilPlugin extends AutoPlugin {
         }
       }
 
+      /**
+       * Get a Java Path for a file, whether it is a regular file or a file
+       * contained inside a JAR. Note that using a Java Path on a regular file
+       * will use the default FileSystem while for JARs a FileSystem is created
+       * for interacting with the files inside the JAR. This allows all Path
+       * functions like resolveSibling/exists to work with both regular files or
+       * files contained inside a JAR.
+       */
+      def getPath(uri: URI): Path = uri.getScheme match {
+        case "file" =>
+          Paths.get(uri)
+        case "jar" =>
+          uri.toString match {
+            case jarRegex(jarPath, _, path) => {
+              val fs = jarFileSystems.getOrElseUpdate(
+                jarPath.replaceAll("/+", "/"),
+                FileSystems.newFileSystem(uri, new java.util.HashMap[String, Any]())
+              )
+              fs.getPath(path)
+            }
+            case _ =>
+              throw new IllegalArgumentException(s"Unable to parse JAR URI: $uri")
+          }
+        case _ =>
+          throw new IllegalArgumentException(s"Unrecognized URI scheme: $uri")
+      }
+
+      /**
+       * Get the directory and file name of a file being flattened, neither of
+       * which includes the serial number prefix. The directory is only used to
+       * group files that should share a serial number, it is never part of the
+       * flattened file name, so path separators in it do not need to be
+       * replaced with anything else.
+       *
+       * Files from the same source directory are grouped together and therefore
+       * share the same serial number. The directory of a file from a JAR starts
+       * with the name of the JAR so that files from different JARs, or from a
+       * JAR and the project itself, that have the same path inside of them
+       * don't share a serial number.
+       */
+      def flatDirAndName(uri: URI): (String, String) = uri.getScheme match {
+        case "file" => {
+          val relative = getRootPath(uri).relativize(Paths.get(uri))
+          val dir = Option(relative.getParent).map(_.toString).getOrElse("")
+          (dir, relative.getFileName.toString)
+        }
+        case "jar" =>
+          uri.toString match {
+            case jarRegex(_, jarName, path) => {
+              val relative = Paths.get(path.dropWhile(_ == '/'))
+              val dir = Option(relative.getParent).map(_.toString).getOrElse("")
+              (s"$jarName/$dir", relative.getFileName.toString)
+            }
+            case _ =>
+              throw new IllegalArgumentException(s"Unable to parse JAR URI: $uri")
+          }
+        case _ =>
+          throw new IllegalArgumentException(s"Unrecognized URI scheme: $uri")
+      }
+
+      /**
+       * Information about each file that is flattened, keyed by the URI of the
+       * file. The value is the text of the file and a map of each reference
+       * found in the file to the URI the reference resolves to. Every file is
+       * read before any of them are written because the name given to each
+       * flattened file depends on all of the directories that contain files
+       * being flattened.
+       */
+      val fileInfos =
+        scala.collection.mutable.LinkedHashMap[URI, (String, Map[String, URI])]()
+
       val seen = scala.collection.mutable.Set[URL]()
       val unprocessed = scala.collection.mutable.Stack[URI]()
       val unresolved = scala.collection.mutable.ArrayBuffer[(URI, String)]()
@@ -705,62 +777,20 @@ object DaffodilPlugin extends AutoPlugin {
       seen ++= projectURIs.map(_.toURL)
       while (!unprocessed.isEmpty) {
         val contextURI = unprocessed.pop
+
+        // Get a Java Path for the current file so that references relative to
+        // this file can be resolved, whether this file is a regular file or is
+        // inside of a JAR
+        val contextPath = getPath(contextURI)
+
         val bytes = contextURI.toURL.openStream().readAllBytes()
-
-        // Get a Java Path for the current file (whether it is in a JAR or
-        // just a regular file) and a Path for where the current file will be
-        // moved to in the flattened directory structure.  Note that using a
-        // Java Path on a regular file will use the default FileSystem while for
-        // JARs a FileSystem is created for interacting with the files inside
-        // the JAR. This allows all Path functions like resolveSibling/exists to
-        // work with both regular files or files contained inside a JAR.
-        val (contextPath, flatPath) = contextURI.getScheme match {
-          case "jar" =>
-            contextURI.toString match {
-              case jarRegex(jarPath, jarName, path) => {
-                val fs = jarFileSystems.getOrElseUpdate(
-                  jarPath.replaceAll("/+", "/"),
-                  FileSystems.newFileSystem(contextURI, new java.util.HashMap[String, Any]())
-                )
-                val cPath = fs.getPath(path)
-                (
-                  cPath,
-                  Paths.get(
-                    flatDir.toString,
-                    s"${jarName}__${cPath.toString.tail.replaceAll("/", "__")}"
-                  )
-                )
-              }
-              case _ =>
-                throw new IllegalArgumentException(s"Unable to parse JAR URI: $contextURI")
-            }
-          case "file" => {
-            val path = Paths.get(contextURI)
-            val root = getRootPath(contextURI)
-            (
-              path,
-              Paths.get(
-                flatDir.toString,
-                root.relativize(path).toString.replaceAllLiterally(File.separator, "__")
-              )
-            )
-          }
-          case _ =>
-            throw new IllegalArgumentException(s"Unrecognized URI scheme: $contextURI")
-        }
-
-        assert(
-          !Files.exists(flatPath),
-          s"File $flatPath already exists and would be overwritten, aborting!"
-        )
-        val bw = Files.newBufferedWriter(flatPath)
         val fileAsString = new String(bytes, Charset.defaultCharset())
 
         val references = referenceRegexes.flatMap { re =>
           re.findAllIn(fileAsString).matchData.map(_.group(1))
         }
 
-        val resolvedRefs = references.flatMap { ref =>
+        val resolvedRefs: Map[String, URI] = references.flatMap { ref =>
           val optResolved = if (ref.startsWith("/")) {
             // Dealing with an absolute path
             Option(classLoader.findResource(ref.tail))
@@ -793,35 +823,12 @@ object DaffodilPlugin extends AutoPlugin {
           }
           if (optResolved.isEmpty)
             unresolved.append((contextURI, ref))
-          optResolved.map(resolved => ref -> resolved)
+          optResolved.map(resolved => ref -> resolved.toURI)
         }.toMap
 
-        val updatedFileAsString = {
-          resolvedRefs.foldLeft(fileAsString) {
-            case (input, (ref, optResolvedURL)) => {
-              // For each reference replace each instance of it in the
-              // file with the same reference but with "/" changed to "__"
-              val resolvedURI = optResolvedURL.toURI
-              val relativized = resolvedURI.getScheme match {
-                case "jar" =>
-                  resolvedURI.toString match {
-                    case jarRegex(_, jarName, path) =>
-                      s"$jarName/${path.tail}"
-                  }
-                case _ => {
-                  val resolvedRoot = getRootPath(resolvedURI)
-                  resolvedRoot.relativize(Paths.get(resolvedURI)).toString
-                }
-              }
-              input.replaceAll(ref, relativized.replaceAll("/", "__"))
-            }
-          }
-        }
-
-        bw.write(updatedFileAsString)
-        bw.close()
-        val unseen = resolvedRefs.values.filter(seen.add(_))
-        unprocessed.pushAll(unseen.map(_.toURI))
+        fileInfos(contextURI) = (fileAsString, resolvedRefs)
+        val unseen = resolvedRefs.values.filter(uri => seen.add(uri.toURL))
+        unprocessed.pushAll(unseen)
       }
 
       // Close any open JAR FileSystems
@@ -837,6 +844,67 @@ object DaffodilPlugin extends AutoPlugin {
         throw new MessageOnlyException(
           "Unable to resolve one or more references while flattening"
         )
+
+      /**
+       * Name each flattened file "<serial>_<file_name>". The serial number is
+       * based on the directory the file came from: all of the directories that
+       * contain files being flattened are sorted alphabetically and numbered,
+       * starting at 01, so every file from the same directory shares the same
+       * serial number. If the new file name, including the serial number and
+       * the extension, would be longer than maxNameLength characters then the
+       * original file name is truncated to fit.
+       */
+      val maxNameLength = 64
+      val flatDirs = fileInfos.keys.map(uri => flatDirAndName(uri)._1).toSeq.distinct.sorted
+      // Serial numbers are two digits, but use more if there are a lot of
+      // directories so that they stay the same width and fit the length limit
+      val serialWidth = math.max(2, flatDirs.size.toString.length)
+      val serials = flatDirs.zipWithIndex.map { case (dir, i) =>
+        dir -> (i + 1).toString.reverse.padTo(serialWidth, '0').reverse
+      }.toMap
+
+      def flatName(uri: URI): String = {
+        val (dir, fileName) = flatDirAndName(uri)
+        val prefix = serials(dir) + "_"
+        val maxLength = maxNameLength - prefix.length
+        // Everything from the first dot on is treated as the extension so that
+        // multi-part extensions, like ".dfdl.xsd", are kept intact
+        val dot = fileName.indexOf('.')
+        val (base, ext) =
+          if (dot <= 0) (fileName, "")
+          else (fileName.substring(0, dot), fileName.substring(dot))
+        val keepExt = ext.substring(0, math.min(ext.length, maxLength))
+        val keepBase = base.substring(0, math.min(base.length, maxLength - keepExt.length))
+        prefix + keepBase + keepExt
+      }
+
+      val flatNames = fileInfos.keys.map(uri => uri -> flatName(uri)).toMap
+
+      // Error if two or more files end up with the same flattened name since
+      // one file would silently overwrite another
+      val duplicates = flatNames.values.toSeq.groupBy(identity).filter(_._2.size > 1)
+      if (duplicates.nonEmpty) {
+        duplicates.toSeq.sortBy(_._1).foreach { case (fileName, uris) =>
+          logger.error(s"More than one file would be named $fileName:")
+          uris.sorted.foreach(uri => logger.error(s"  $uri"))
+        }
+        throw new MessageOnlyException(
+          "Two or more files flatten to the same file name, aborting!"
+        )
+      }
+
+      /* Write out each file with its new name and updated references */
+      flatNames.toSeq.sortBy(_._2).foreach { case (uri, fileName) =>
+        val (fileAsString, resolvedRefs) = fileInfos(uri)
+        val updatedFileAsString =
+          resolvedRefs.foldLeft(fileAsString) { case (input, (ref, resolvedURI)) =>
+            // For each reference replace each instance of it in the file with
+            // the new name of the file that the reference resolves to
+            input.replaceAll(ref, Matcher.quoteReplacement(flatNames(resolvedURI)))
+          }
+        val flatPath = flatDir.toPath.resolve(fileName)
+        Files.write(flatPath, updatedFileAsString.getBytes(Charset.defaultCharset()))
+      }
 
       /* Create zip file containing all flattened schemas */
       val flattenedFiles = IO.listFiles(flatDir).sorted
